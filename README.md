@@ -1,2 +1,1 @@
-# ziggy
-Get ziggy with it
+# Ziggy
