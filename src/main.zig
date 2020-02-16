@@ -133,13 +133,8 @@ fn cleanup() void {
 }
 
 fn initVulkan(allocator: *Allocator, window: *glfw.GLFWwindow) !void {
-    // Helper function to list available extensions
-    // try listExtensions(allocator);
-
     try createInstance(allocator);
-
     try setupDebugCallback();
-
     try createSurface(window);
     try pickPhysicalDevice(allocator);
     try createLogicalDevice(allocator);
@@ -151,21 +146,6 @@ fn initVulkan(allocator: *Allocator, window: *glfw.GLFWwindow) !void {
     try createCommandPool(allocator);
     try createCommandBuffers(allocator);
     try createSyncObjects();
-}
-
-fn listExtensions(allocator: *Allocator) !void {
-    var extensionCount : u32 = undefined;
-
-    try checkSuccess(vk.vkEnumerateInstanceExtensionProperties(null, &extensionCount, null));
-
-    const extensions = try allocator.alloc(vk.ExtensionProperties, extensionCount);
-    defer allocator.free(extensions);
-
-    try checkSuccess(vk.vkEnumerateInstanceExtensionProperties(null, &extensionCount, extensions.ptr));
-
-    for (extensions) |extension, i| {
-        std.debug.warn("Extensions({}): {}\n", .{ i, extension.extensionName });
-    }
 }
 
 fn createInstance(allocator: *Allocator) !void {
