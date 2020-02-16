@@ -1,11 +1,11 @@
 const std = @import("std");
-const assert = std.debug.assert;
+const assert = std.debuglfw.assert;
 const mem = std.mem;
 const Allocator = mem.Allocator;
 const maxInt = std.math.maxInt;
 
-const v = @import("vulkan_core.zig");
-const g = @import("glfw.zig");
+const vk = @import("vulkan.zig");
+const glfw = @import("glfw.zig");
 
 const WIDTH = 1280;
 const HEIGHT = 720;
@@ -14,31 +14,31 @@ const MAX_FRAMES_IN_FLIGHT = 2;
 
 const enableValidationLayers = std.debug.runtime_safety;
 const validationLayers = [_][*:0]const u8{"VK_LAYER_LUNARG_standard_validation"};
-const deviceExtensions = [_][*:0]const u8{v.KHR_SWAPCHAIN_EXTENSION_NAME};
+const deviceExtensions = [_][*:0]const u8{vk.KHR_SWAPCHAIN_EXTENSION_NAME};
 
 var currentFrame: usize = 0;
-var instance: v.Instance = undefined;
-var callback: v.DebugReportCallbackEXT = undefined;
-var surface: v.SurfaceKHR = undefined;
-var physicalDevice: v.PhysicalDevice = undefined;
-var global_device: v.Device = undefined;
-var graphicsQueue: v.Queue = undefined;
-var presentQueue: v.Queue = undefined;
-var swapChainImages: []v.Image = undefined;
-var swapChain: v.SwapchainKHR = undefined;
-var swapChainImageFormat: v.Format = undefined;
-var swapChainExtent: v.Extent2D = undefined;
-var swapChainImageViews: []v.ImageView = undefined;
-var renderPass: v.RenderPass = undefined;
-var pipelineLayout: v.PipelineLayout = undefined;
-var graphicsPipeline: v.Pipeline = undefined;
-var swapChainFramebuffers: []v.Framebuffer = undefined;
-var commandPool: v.CommandPool = undefined;
-var commandBuffers: []v.CommandBuffer = undefined;
+var instance: vk.Instance = undefined;
+var callback: vk.DebugReportCallbackEXT = undefined;
+var surface: vk.SurfaceKHR = undefined;
+var physicalDevice: vk.PhysicalDevice = undefined;
+var global_device: vk.Device = undefined;
+var graphicsQueue: vk.Queue = undefined;
+var presentQueue: vk.Queue = undefined;
+var swapChainImages: []vk.Image = undefined;
+var swapChain: vk.SwapchainKHR = undefined;
+var swapChainImageFormat: vk.Format = undefined;
+var swapChainExtent: vk.Extent2D = undefined;
+var swapChainImageViews: []vk.ImageView = undefined;
+var renderPass: vk.RenderPass = undefined;
+var pipelineLayout: vk.PipelineLayout = undefined;
+var graphicsPipeline: vk.Pipeline = undefined;
+var swapChainFramebuffers: []vk.Framebuffer = undefined;
+var commandPool: vk.CommandPool = undefined;
+var commandBuffers: []vk.CommandBuffer = undefined;
 
-var imageAvailableSemaphores: [MAX_FRAMES_IN_FLIGHT]v.Semaphore = undefined;
-var renderFinishedSemaphores: [MAX_FRAMES_IN_FLIGHT]v.Semaphore = undefined;
-var inFlightFences: [MAX_FRAMES_IN_FLIGHT]v.Fence = undefined;
+var imageAvailableSemaphores: [MAX_FRAMES_IN_FLIGHT]vk.Semaphore = undefined;
+var renderFinishedSemaphores: [MAX_FRAMES_IN_FLIGHT]vk.Semaphore = undefined;
+var inFlightFences: [MAX_FRAMES_IN_FLIGHT]vk.Fence = undefined;
 
 const QueueFamilyIndices = struct {
     graphicsFamily: ?u32,
@@ -57,17 +57,17 @@ const QueueFamilyIndices = struct {
 };
 
 const SwapChainSupportDetails = struct {
-    capabilities: v.SurfaceCapabilitiesKHR,
-    formats: std.ArrayList(v.SurfaceFormatKHR),
-    presentModes: std.ArrayList(v.PresentModeKHR),
+    capabilities: vk.SurfaceCapabilitiesKHR,
+    formats: std.ArrayList(vk.SurfaceFormatKHR),
+    presentModes: std.ArrayList(vk.PresentModeKHR),
 
     fn init(allocator: *Allocator) SwapChainSupportDetails {
         var result = SwapChainSupportDetails{
             .capabilities = undefined,
-            .formats = std.ArrayList(v.SurfaceFormatKHR).init(allocator),
-            .presentModes = std.ArrayList(v.PresentModeKHR).init(allocator),
+            .formats = std.ArrayList(vk.SurfaceFormatKHR).init(allocator),
+            .presentModes = std.ArrayList(vk.PresentModeKHR).init(allocator),
         };
-        const slice = @sliceToBytes(@as(*[1]v.SurfaceCapabilitiesKHR, &result.capabilities)[0..1]);
+        const slice = @sliceToBytes(@as(*[1]vk.SurfaceCapabilitiesKHR, &result.capabilities)[0..1]);
         std.mem.set(u8, slice, 0);
         return result;
     }
@@ -79,23 +79,23 @@ const SwapChainSupportDetails = struct {
 };
 
 pub fn main() !void {
-    if (g.glfwInit() == 0) return error.GlfwInitFailed;
-    defer g.glfwTerminate();
+    if (glfw.glfwInit() == 0) return error.GlfwInitFailed;
+    defer glfw.glfwTerminate();
 
-    g.glfwWindowHint(g.GLFW_CLIENT_API, g.GLFW_NO_API);
-    g.glfwWindowHint(g.GLFW_RESIZABLE, g.GLFW_FALSE);
+    glfw.glfwWindowHint(glfw.GLFW_CLIENT_API, glfw.GLFW_NO_API);
+    glfw.glfwWindowHint(glfw.GLFW_RESIZABLE, glfw.GLFW_FALSE);
 
-    const window = g.glfwCreateWindow(WIDTH, HEIGHT, "Zig Vulkan Triangle", null, null) orelse return error.GlfwCreateWindowFailed;
-    defer g.glfwDestroyWindow(window);
+    const window = glfw.glfwCreateWindow(WIDTH, HEIGHT, "Zig Vulkan Triangle", null, null) orelse return error.GlfwCreateWindowFailed;
+    defer glfw.glfwDestroyWindow(window);
 
     const allocator = std.heap.c_allocator;
     try initVulkan(allocator, window);
 
-    while (g.glfwWindowShouldClose(window) == 0) {
-        g.glfwPollEvents();
+    while (glfw.glfwWindowShouldClose(window) == 0) {
+        glfw.glfwPollEvents();
         try drawFrame();
     }
-    try checkSuccess(v.vkDeviceWaitIdle(global_device));
+    try checkSuccess(vk.vkDeviceWaitIdle(global_device));
 
     cleanup();
 }
@@ -103,37 +103,37 @@ pub fn main() !void {
 fn cleanup() void {
     var i: usize = 0;
     while (i < MAX_FRAMES_IN_FLIGHT) : (i += 1) {
-        v.vkDestroySemaphore(global_device, renderFinishedSemaphores[i], null);
-        v.vkDestroySemaphore(global_device, imageAvailableSemaphores[i], null);
-        v.vkDestroyFence(global_device, inFlightFences[i], null);
+        vk.vkDestroySemaphore(global_device, renderFinishedSemaphores[i], null);
+        vk.vkDestroySemaphore(global_device, imageAvailableSemaphores[i], null);
+        vk.vkDestroyFence(global_device, inFlightFences[i], null);
     }
 
-    v.vkDestroyCommandPool(global_device, commandPool, null);
+    vk.vkDestroyCommandPool(global_device, commandPool, null);
 
     for (swapChainFramebuffers) |framebuffer| {
-        v.vkDestroyFramebuffer(global_device, framebuffer, null);
+        vk.vkDestroyFramebuffer(global_device, framebuffer, null);
     }
 
-    v.vkDestroyPipeline(global_device, graphicsPipeline, null);
-    v.vkDestroyPipelineLayout(global_device, pipelineLayout, null);
-    v.vkDestroyRenderPass(global_device, renderPass, null);
+    vk.vkDestroyPipeline(global_device, graphicsPipeline, null);
+    vk.vkDestroyPipelineLayout(global_device, pipelineLayout, null);
+    vk.vkDestroyRenderPass(global_device, renderPass, null);
 
     for (swapChainImageViews) |imageView| {
-        v.vkDestroyImageView(global_device, imageView, null);
+        vk.vkDestroyImageView(global_device, imageView, null);
     }
 
-    v.vkDestroySwapchainKHR(global_device, swapChain, null);
-    v.vkDestroyDevice(global_device, null);
+    vk.vkDestroySwapchainKHR(global_device, swapChain, null);
+    vk.vkDestroyDevice(global_device, null);
 
     if (enableValidationLayers) {
-        // DestroyDebugReportCallbackEXT(null);
+        DestroyDebugReportCallbackEXT(null);
     }
 
-    v.vkDestroySurfaceKHR(instance, surface, null);
-    v.vkDestroyInstance(instance, null);
+    vk.vkDestroySurfaceKHR(instance, surface, null);
+    vk.vkDestroyInstance(instance, null);
 }
 
-fn initVulkan(allocator: *Allocator, window: *g.GLFWwindow) !void {
+fn initVulkan(allocator: *Allocator, window: *glfw.GLFWwindow) !void {
     // Helper function to list available extensions
     // try listExtensions(allocator);
 
@@ -158,15 +158,15 @@ fn initVulkan(allocator: *Allocator, window: *g.GLFWwindow) !void {
 fn listExtensions(allocator: *Allocator) !void {
     var extensionCount : u32 = undefined;
 
-    try checkSuccess(v.vkEnumerateInstanceExtensionProperties(null, &extensionCount, null));
+    try checkSuccess(vk.vkEnumerateInstanceExtensionProperties(null, &extensionCount, null));
 
-    const extensions = try allocator.alloc(v.ExtensionProperties, extensionCount);
+    const extensions = try allocator.alloc(vk.ExtensionProperties, extensionCount);
     defer allocator.free(extensions);
 
-    try checkSuccess(v.vkEnumerateInstanceExtensionProperties(null, &extensionCount, extensions.ptr));
+    try checkSuccess(vk.vkEnumerateInstanceExtensionProperties(null, &extensionCount, extensions.ptr));
 
     for (extensions) |extension, i| {
-        std.debug.warn("Extensions({}): {}\n", .{ i, extension.extensionName });
+        std.debuglfw.warn("Extensions({}): {}\n", .{ i, extension.extensionName });
     }
 }
 
@@ -177,12 +177,12 @@ fn createInstance(allocator: *Allocator) !void {
         }
     }
 
-    const appInfo = v.ApplicationInfo{
-        .sType = v.StructureType.APPLICATION_INFO,
+    const appInfo = vk.ApplicationInfo{
+        .sType = vk.StructureType.APPLICATION_INFO,
         // We tell the instance which version of vulkan we support
-        .apiVersion = v.MAKE_VERSION(1, 2, 0),
-        .applicationVersion = v.MAKE_VERSION(1, 0, 0),
-        .engineVersion = v.MAKE_VERSION(1, 0, 0),
+        .apiVersion = vk.MAKE_VERSION(1, 2, 0),
+        .applicationVersion = vk.MAKE_VERSION(1, 0, 0),
+        .engineVersion = vk.MAKE_VERSION(1, 0, 0),
         .pApplicationName = null,
         .pEngineName = null,
         .pNext = null,
@@ -191,8 +191,8 @@ fn createInstance(allocator: *Allocator) !void {
     const extensions = try getRequiredExtensions(allocator);
     defer allocator.free(extensions);
 
-    const createInfo = v.InstanceCreateInfo{
-        .sType = v.StructureType.INSTANCE_CREATE_INFO,
+    const createInfo = vk.InstanceCreateInfo{
+        .sType = vk.StructureType.INSTANCE_CREATE_INFO,
         .pApplicationInfo = &appInfo,
 
         .enabledExtensionCount = @intCast(u32, extensions.len),
@@ -206,13 +206,13 @@ fn createInstance(allocator: *Allocator) !void {
         .flags = 0,
     };
 
-    try checkSuccess(v.vkCreateInstance(&createInfo, null, &instance));
+    try checkSuccess(vk.vkCreateInstance(&createInfo, null, &instance));
 }
 
 /// caller must free returned memory
 fn getRequiredExtensions(allocator: *Allocator) ![][*]const u8 {
     var glfwExtensionCount: u32 = 0;
-    var glfwExtensions: [*]const [*]const u8 = g.glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+    var glfwExtensions: [*]const [*]const u8 = glfw.glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
     var extensions = std.ArrayList([*]const u8).init(allocator);
     errdefer extensions.deinit();
@@ -222,36 +222,36 @@ fn getRequiredExtensions(allocator: *Allocator) ![][*]const u8 {
     if (enableValidationLayers) {
         // TODO: Got this from the vulkan tutorial. Find out if we need this and/or
         // if this is better/worse than VK_EXT_DEBUG_REPORT_EXTENSION_NAME.
-        // try extensions.append(v.VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        // try extensions.append(vk.VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
-        try extensions.append(v.EXT_DEBUG_REPORT_EXTENSION_NAME);
+        try extensions.append(vk.EXT_DEBUG_REPORT_EXTENSION_NAME);
     }
 
     return extensions.toOwnedSlice();
 }
 
-fn createSurface(window: *g.GLFWwindow) !void {
-    if (g.glfwCreateWindowSurface(instance, window, null, &surface) != v.Result.SUCCESS) {
+fn createSurface(window: *glfw.GLFWwindow) !void {
+    if (glfw.glfwCreateWindowSurface(instance, window, null, &surface) != vk.Result.SUCCESS) {
         return error.FailedToCreateWindowSurface;
     }
 }
 
-// Currently reviewing...
+// Currently reviewinglfw...
 
 fn pickPhysicalDevice(allocator: *Allocator) !void {
     var deviceCount: u32 = 0;
 
     // Note: The instance has the required api version, which might limit the available
     // device(s)
-    try checkSuccess(v.vkEnumeratePhysicalDevices(instance, &deviceCount, null));
+    try checkSuccess(vk.vkEnumeratePhysicalDevices(instance, &deviceCount, null));
 
     if (deviceCount == 0) {
         return error.FailedToFindGPUsWithVulkanSupport;
     }
 
-    const devices = try allocator.alloc(v.PhysicalDevice, deviceCount);
+    const devices = try allocator.alloc(vk.PhysicalDevice, deviceCount);
     defer allocator.free(devices);
-    try checkSuccess(v.vkEnumeratePhysicalDevices(instance, &deviceCount, devices.ptr));
+    try checkSuccess(vk.vkEnumeratePhysicalDevices(instance, &deviceCount, devices.ptr));
 
     physicalDevice = for (devices) |device| {
         if (try isDeviceSuitable(allocator, device)) {
@@ -260,7 +260,7 @@ fn pickPhysicalDevice(allocator: *Allocator) !void {
     } else return error.FailedToFindSuitableGPU;
 }
 
-fn isDeviceSuitable(allocator: *Allocator, device: v.PhysicalDevice) !bool {
+fn isDeviceSuitable(allocator: *Allocator, device: vk.PhysicalDevice) !bool {
     const indices = try findQueueFamilies(allocator, device);
 
     const extensionsSupported = try checkDeviceExtensionSupport(allocator, device);
@@ -277,26 +277,26 @@ fn isDeviceSuitable(allocator: *Allocator, device: v.PhysicalDevice) !bool {
 
 // All operations are processed in a queue. We return the first queue family that meets
 // our needs.
-fn findQueueFamilies(allocator: *Allocator, device: v.PhysicalDevice) !QueueFamilyIndices {
+fn findQueueFamilies(allocator: *Allocator, device: vk.PhysicalDevice) !QueueFamilyIndices {
     var indices = QueueFamilyIndices.init();
 
     var queueFamilyCount: u32 = 0;
-    v.vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, null);
+    vk.vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, null);
 
-    const queueFamilies = try allocator.alloc(v.QueueFamilyProperties, queueFamilyCount);
+    const queueFamilies = try allocator.alloc(vk.QueueFamilyProperties, queueFamilyCount);
     defer allocator.free(queueFamilies);
-    v.vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.ptr);
+    vk.vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.ptr);
 
     var i: u32 = 0;
     for (queueFamilies) |queueFamily| {
         if (queueFamily.queueCount > 0 and
-            queueFamily.queueFlags & v.QueueFlagBits.GRAPHICS_BIT != 0)
+            queueFamily.queueFlags & vk.QueueFlagBits.GRAPHICS_BIT != 0)
         {
             indices.graphicsFamily = i;
         }
 
-        var presentSupport: v.Bool32 = 0;
-        try checkSuccess(v.vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport));
+        var presentSupport: vk.Bool32 = 0;
+        try checkSuccess(vk.vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport));
 
         if (queueFamily.queueCount > 0 and presentSupport != 0) {
             indices.presentFamily = i;
@@ -312,13 +312,13 @@ fn findQueueFamilies(allocator: *Allocator, device: v.PhysicalDevice) !QueueFami
     return indices;
 }
 
-fn checkDeviceExtensionSupport(allocator: *Allocator, device: v.PhysicalDevice) !bool {
+fn checkDeviceExtensionSupport(allocator: *Allocator, device: vk.PhysicalDevice) !bool {
     var extensionCount: u32 = undefined;
-    try checkSuccess(v.vkEnumerateDeviceExtensionProperties(device, null, &extensionCount, null));
+    try checkSuccess(vk.vkEnumerateDeviceExtensionProperties(device, null, &extensionCount, null));
 
-    const availableExtensions = try allocator.alloc(v.ExtensionProperties, extensionCount);
+    const availableExtensions = try allocator.alloc(vk.ExtensionProperties, extensionCount);
     defer allocator.free(availableExtensions);
-    try checkSuccess(v.vkEnumerateDeviceExtensionProperties(device, null, &extensionCount, availableExtensions.ptr));
+    try checkSuccess(vk.vkEnumerateDeviceExtensionProperties(device, null, &extensionCount, availableExtensions.ptr));
 
     var requiredExtensions = std.HashMap([*]const u8, void, hash_cstr, eql_cstr).init(allocator);
     defer requiredExtensions.deinit();
@@ -336,98 +336,98 @@ fn checkDeviceExtensionSupport(allocator: *Allocator, device: v.PhysicalDevice) 
 // To Review...
 
 fn createCommandBuffers(allocator: *Allocator) !void {
-    commandBuffers = try allocator.alloc(v.CommandBuffer, swapChainFramebuffers.len);
+    commandBuffers = try allocator.alloc(vk.CommandBuffer, swapChainFramebuffers.len);
 
-    const allocInfo = v.CommandBufferAllocateInfo{
-        .sType = v.StructureType.COMMAND_BUFFER_ALLOCATE_INFO,
+    const allocInfo = vk.CommandBufferAllocateInfo{
+        .sType = vk.StructureType.COMMAND_BUFFER_ALLOCATE_INFO,
         .commandPool = commandPool,
-        .level = v.CommandBufferLevel.PRIMARY,
+        .level = vk.CommandBufferLevel.PRIMARY,
         .commandBufferCount = @intCast(u32, commandBuffers.len),
         .pNext = null,
     };
 
-    try checkSuccess(v.vkAllocateCommandBuffers(global_device, &allocInfo, commandBuffers.ptr));
+    try checkSuccess(vk.vkAllocateCommandBuffers(global_device, &allocInfo, commandBuffers.ptr));
 
     for (commandBuffers) |command_buffer, i| {
-        const beginInfo = v.CommandBufferBeginInfo{
-            .sType = v.StructureType.COMMAND_BUFFER_BEGIN_INFO,
-            .flags = v.CommandBufferUsageFlagBits.SIMULTANEOUS_USE_BIT,
+        const beginInfo = vk.CommandBufferBeginInfo{
+            .sType = vk.StructureType.COMMAND_BUFFER_BEGIN_INFO,
+            .flags = vk.CommandBufferUsageFlagBits.SIMULTANEOUS_USE_BIT,
             .pNext = null,
             .pInheritanceInfo = null,
         };
 
-        try checkSuccess(v.vkBeginCommandBuffer(commandBuffers[i], &beginInfo));
+        try checkSuccess(vk.vkBeginCommandBuffer(commandBuffers[i], &beginInfo));
 
-        const clearColor = v.ClearValue{ .color = v.ClearColorValue{ .float32 = [_]f32{ 0.0, 0.0, 0.0, 1.0 } } };
+        const clearColor = vk.ClearValue{ .color = vk.ClearColorValue{ .float32 = [_]f32{ 0.0, 0.0, 0.0, 1.0 } } };
 
-        const renderPassInfo = v.RenderPassBeginInfo{
-            .sType = v.StructureType.RENDER_PASS_BEGIN_INFO,
+        const renderPassInfo = vk.RenderPassBeginInfo{
+            .sType = vk.StructureType.RENDER_PASS_BEGIN_INFO,
             .renderPass = renderPass,
             .framebuffer = swapChainFramebuffers[i],
-            .renderArea = v.Rect2D{
-                .offset = v.Offset2D{ .x = 0, .y = 0 },
+            .renderArea = vk.Rect2D{
+                .offset = vk.Offset2D{ .x = 0, .y = 0 },
                 .extent = swapChainExtent,
             },
             .clearValueCount = 1,
-            .pClearValues = @ptrCast([*]const v.ClearValue, &clearColor),
+            .pClearValues = @ptrCast([*]const vk.ClearValue, &clearColor),
 
             .pNext = null,
         };
 
-        v.vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, v.SubpassContents.INLINE);
+        vk.vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, vk.SubpassContents.INLINE);
         {
-            v.vkCmdBindPipeline(commandBuffers[i], v.PipelineBindPoint.GRAPHICS, graphicsPipeline);
-            v.vkCmdDraw(commandBuffers[i], 3, 1, 0, 0);
+            vk.vkCmdBindPipeline(commandBuffers[i], vk.PipelineBindPoint.GRAPHICS, graphicsPipeline);
+            vk.vkCmdDraw(commandBuffers[i], 3, 1, 0, 0);
         }
-        v.vkCmdEndRenderPass(commandBuffers[i]);
+        vk.vkCmdEndRenderPass(commandBuffers[i]);
 
-        try checkSuccess(v.vkEndCommandBuffer(commandBuffers[i]));
+        try checkSuccess(vk.vkEndCommandBuffer(commandBuffers[i]));
     }
 }
 
 fn createSyncObjects() !void {
-    const semaphoreInfo = v.SemaphoreCreateInfo{
-        .sType = v.StructureType.SEMAPHORE_CREATE_INFO,
+    const semaphoreInfo = vk.SemaphoreCreateInfo{
+        .sType = vk.StructureType.SEMAPHORE_CREATE_INFO,
         .pNext = null,
         .flags = 0,
     };
 
-    const fenceInfo = v.FenceCreateInfo{
-        .sType = v.StructureType.FENCE_CREATE_INFO,
-        .flags = v.FenceCreateFlagBits.SIGNALED_BIT,
+    const fenceInfo = vk.FenceCreateInfo{
+        .sType = vk.StructureType.FENCE_CREATE_INFO,
+        .flags = vk.FenceCreateFlagBits.SIGNALED_BIT,
         .pNext = null,
     };
 
     var i: usize = 0;
     while (i < MAX_FRAMES_IN_FLIGHT) : (i += 1) {
-        try checkSuccess(v.vkCreateSemaphore(global_device, &semaphoreInfo, null, &imageAvailableSemaphores[i]));
-        try checkSuccess(v.vkCreateSemaphore(global_device, &semaphoreInfo, null, &renderFinishedSemaphores[i]));
-        try checkSuccess(v.vkCreateFence(global_device, &fenceInfo, null, &inFlightFences[i]));
+        try checkSuccess(vk.vkCreateSemaphore(global_device, &semaphoreInfo, null, &imageAvailableSemaphores[i]));
+        try checkSuccess(vk.vkCreateSemaphore(global_device, &semaphoreInfo, null, &renderFinishedSemaphores[i]));
+        try checkSuccess(vk.vkCreateFence(global_device, &fenceInfo, null, &inFlightFences[i]));
     }
 }
 
 fn createCommandPool(allocator: *Allocator) !void {
     const queueFamilyIndices = try findQueueFamilies(allocator, physicalDevice);
 
-    const poolInfo = v.CommandPoolCreateInfo{
-        .sType = v.StructureType.COMMAND_POOL_CREATE_INFO,
+    const poolInfo = vk.CommandPoolCreateInfo{
+        .sType = vk.StructureType.COMMAND_POOL_CREATE_INFO,
         .queueFamilyIndex = queueFamilyIndices.graphicsFamily.?,
 
         .pNext = null,
         .flags = 0,
     };
 
-    try checkSuccess(v.vkCreateCommandPool(global_device, &poolInfo, null, &commandPool));
+    try checkSuccess(vk.vkCreateCommandPool(global_device, &poolInfo, null, &commandPool));
 }
 
 fn createFramebuffers(allocator: *Allocator) !void {
-    swapChainFramebuffers = try allocator.alloc(v.Framebuffer, swapChainImageViews.len);
+    swapChainFramebuffers = try allocator.alloc(vk.Framebuffer, swapChainImageViews.len);
 
     for (swapChainImageViews) |swap_chain_image_view, i| {
-        const attachments = [_]v.ImageView{swap_chain_image_view};
+        const attachments = [_]vk.ImageView{swap_chain_image_view};
 
-        const framebufferInfo = v.FramebufferCreateInfo{
-            .sType = v.StructureType.FRAMEBUFFER_CREATE_INFO,
+        const framebufferInfo = vk.FramebufferCreateInfo{
+            .sType = vk.StructureType.FRAMEBUFFER_CREATE_INFO,
             .renderPass = renderPass,
             .attachmentCount = 1,
             .pAttachments = &attachments,
@@ -439,13 +439,13 @@ fn createFramebuffers(allocator: *Allocator) !void {
             .flags = 0,
         };
 
-        try checkSuccess(v.vkCreateFramebuffer(global_device, &framebufferInfo, null, &swapChainFramebuffers[i]));
+        try checkSuccess(vk.vkCreateFramebuffer(global_device, &framebufferInfo, null, &swapChainFramebuffers[i]));
     }
 }
 
-fn createShaderModule(code: []align(@alignOf(u32)) const u8) !v.ShaderModule {
-    const createInfo = v.ShaderModuleCreateInfo{
-        .sType = v.StructureType.SHADER_MODULE_CREATE_INFO,
+fn createShaderModule(code: []align(@alignOf(u32)) const u8) !vk.ShaderModule {
+    const createInfo = vk.ShaderModuleCreateInfo{
+        .sType = vk.StructureType.SHADER_MODULE_CREATE_INFO,
         .codeSize = code.len,
         .pCode = @bytesToSlice(u32, code).ptr,
 
@@ -453,8 +453,8 @@ fn createShaderModule(code: []align(@alignOf(u32)) const u8) !v.ShaderModule {
         .flags = 0,
     };
 
-    var shaderModule: v.ShaderModule = undefined;
-    try checkSuccess(v.vkCreateShaderModule(global_device, &createInfo, null, &shaderModule));
+    var shaderModule: vk.ShaderModule = undefined;
+    try checkSuccess(vk.vkCreateShaderModule(global_device, &createInfo, null, &shaderModule));
 
     return shaderModule;
 }
@@ -463,15 +463,15 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
     const vertShaderCode = try std.fs.cwd().readFileAllocAligned(allocator, "shaders\\vert.spv", 1<<20, @alignOf(u32));
     defer allocator.free(vertShaderCode);
 
-    const fragShaderCode = try std.fs.cwd().readFileAllocAligned(allocator, "shaders\\frag.spv", 1<<20, @alignOf(u32));
+    const fragShaderCode = try std.fs.cwd().readFileAllocAligned(allocator, "shaders\\fraglfw.spv", 1<<20, @alignOf(u32));
     defer allocator.free(fragShaderCode);
 
     const vertShaderModule = try createShaderModule(vertShaderCode);
     const fragShaderModule = try createShaderModule(fragShaderCode);
 
-    const vertShaderStageInfo = v.PipelineShaderStageCreateInfo{
-        .sType = v.StructureType.PIPELINE_SHADER_STAGE_CREATE_INFO,
-        .stage = v.ShaderStageFlagBits.VERTEX_BIT,
+    const vertShaderStageInfo = vk.PipelineShaderStageCreateInfo{
+        .sType = vk.StructureType.PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage = vk.ShaderStageFlagBits.VERTEX_BIT,
         .module = vertShaderModule,
         .pName = "main",
 
@@ -480,9 +480,9 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
         .pSpecializationInfo = null,
     };
 
-    const fragShaderStageInfo = v.PipelineShaderStageCreateInfo{
-        .sType = v.StructureType.PIPELINE_SHADER_STAGE_CREATE_INFO,
-        .stage = v.ShaderStageFlagBits.FRAGMENT_BIT,
+    const fragShaderStageInfo = vk.PipelineShaderStageCreateInfo{
+        .sType = vk.StructureType.PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage = vk.ShaderStageFlagBits.FRAGMENT_BIT,
         .module = fragShaderModule,
         .pName = "main",
         .pNext = null,
@@ -491,10 +491,10 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
         .pSpecializationInfo = null,
     };
 
-    const shaderStages = [_]v.PipelineShaderStageCreateInfo{ vertShaderStageInfo, fragShaderStageInfo };
+    const shaderStages = [_]vk.PipelineShaderStageCreateInfo{ vertShaderStageInfo, fragShaderStageInfo };
 
-    const vertexInputInfo = v.PipelineVertexInputStateCreateInfo{
-        .sType = v.StructureType.PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+    const vertexInputInfo = vk.PipelineVertexInputStateCreateInfo{
+        .sType = vk.StructureType.PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .vertexBindingDescriptionCount = 0,
         .vertexAttributeDescriptionCount = 0,
 
@@ -504,15 +504,15 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
         .flags = 0,
     };
 
-    const inputAssembly = v.PipelineInputAssemblyStateCreateInfo{
-        .sType = v.StructureType.PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .topology = v.PrimitiveTopology.TRIANGLE_LIST,
-        .primitiveRestartEnable = v.FALSE,
+    const inputAssembly = vk.PipelineInputAssemblyStateCreateInfo{
+        .sType = vk.StructureType.PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        .topology = vk.PrimitiveTopology.TRIANGLE_LIST,
+        .primitiveRestartEnable = vk.FALSE,
         .pNext = null,
         .flags = 0,
     };
 
-    const viewport = [_]v.Viewport{v.Viewport{
+    const viewport = [_]vk.Viewport{vk.Viewport{
         .x = 0.0,
         .y = 0.0,
         .width = @intToFloat(f32, swapChainExtent.width),
@@ -521,13 +521,13 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
         .maxDepth = 1.0,
     }};
 
-    const scissor = [_]v.Rect2D{v.Rect2D{
-        .offset = v.Offset2D{ .x = 0, .y = 0 },
+    const scissor = [_]vk.Rect2D{vk.Rect2D{
+        .offset = vk.Offset2D{ .x = 0, .y = 0 },
         .extent = swapChainExtent,
     }};
 
-    const viewportState = v.PipelineViewportStateCreateInfo{
-        .sType = v.StructureType.PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+    const viewportState = vk.PipelineViewportStateCreateInfo{
+        .sType = vk.StructureType.PIPELINE_VIEWPORT_STATE_CREATE_INFO,
         .viewportCount = 1,
         .pViewports = &viewport,
         .scissorCount = 1,
@@ -537,15 +537,15 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
         .flags = 0,
     };
 
-    const rasterizer = v.PipelineRasterizationStateCreateInfo{
-        .sType = v.StructureType.PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-        .depthClampEnable = v.FALSE,
-        .rasterizerDiscardEnable = v.FALSE,
-        .polygonMode = v.PolygonMode.FILL,
+    const rasterizer = vk.PipelineRasterizationStateCreateInfo{
+        .sType = vk.StructureType.PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        .depthClampEnable = vk.FALSE,
+        .rasterizerDiscardEnable = vk.FALSE,
+        .polygonMode = vk.PolygonMode.FILL,
         .lineWidth = 1.0,
-        .cullMode = v.CullModeFlagBits.BACK_BIT,
-        .frontFace = v.FrontFace.CLOCKWISE,
-        .depthBiasEnable = v.FALSE,
+        .cullMode = vk.CullModeFlagBits.BACK_BIT,
+        .frontFace = vk.FrontFace.CLOCKWISE,
+        .depthBiasEnable = vk.FALSE,
 
         .pNext = null,
         .flags = 0,
@@ -554,10 +554,10 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
         .depthBiasSlopeFactor = 0,
     };
 
-    const multisampling = v.PipelineMultisampleStateCreateInfo{
-        .sType = v.StructureType.PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .sampleShadingEnable = v.FALSE,
-        .rasterizationSamples = v.SampleCountFlagBits.T_1_BIT,
+    const multisampling = vk.PipelineMultisampleStateCreateInfo{
+        .sType = vk.StructureType.PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .sampleShadingEnable = vk.FALSE,
+        .rasterizationSamples = vk.SampleCountFlagBits.T_1_BIT,
         .pNext = null,
         .flags = 0,
         .minSampleShading = 0,
@@ -566,32 +566,32 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
         .alphaToOneEnable = 0,
     };
 
-    const colorBlendAttachment = v.PipelineColorBlendAttachmentState{
-        .colorWriteMask = v.ColorComponentFlagBits.R_BIT | v.ColorComponentFlagBits.G_BIT | v.ColorComponentFlagBits.B_BIT | v.ColorComponentFlagBits.A_BIT,
-        .blendEnable = v.FALSE,
+    const colorBlendAttachment = vk.PipelineColorBlendAttachmentState{
+        .colorWriteMask = vk.ColorComponentFlagBits.R_BIT | vk.ColorComponentFlagBits.G_BIT | vk.ColorComponentFlagBits.B_BIT | vk.ColorComponentFlagBits.A_BIT,
+        .blendEnable = vk.FALSE,
 
-        .srcColorBlendFactor = v.BlendFactor.ZERO,
-        .dstColorBlendFactor = v.BlendFactor.ZERO,
-        .colorBlendOp = v.BlendOp.ADD,
-        .srcAlphaBlendFactor = v.BlendFactor.ZERO,
-        .dstAlphaBlendFactor = v.BlendFactor.ZERO,
-        .alphaBlendOp = v.BlendOp.ADD,
+        .srcColorBlendFactor = vk.BlendFactor.ZERO,
+        .dstColorBlendFactor = vk.BlendFactor.ZERO,
+        .colorBlendOp = vk.BlendOp.ADD,
+        .srcAlphaBlendFactor = vk.BlendFactor.ZERO,
+        .dstAlphaBlendFactor = vk.BlendFactor.ZERO,
+        .alphaBlendOp = vk.BlendOp.ADD,
     };
 
-    const colorBlending = v.PipelineColorBlendStateCreateInfo{
-        .sType = v.StructureType.PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-        .logicOpEnable = v.FALSE,
-        .logicOp = v.LogicOp.COPY,
+    const colorBlending = vk.PipelineColorBlendStateCreateInfo{
+        .sType = vk.StructureType.PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .logicOpEnable = vk.FALSE,
+        .logicOp = vk.LogicOp.COPY,
         .attachmentCount = 1,
-        .pAttachments = @ptrCast([*]const v.PipelineColorBlendAttachmentState, &colorBlendAttachment),
+        .pAttachments = @ptrCast([*]const vk.PipelineColorBlendAttachmentState, &colorBlendAttachment),
         .blendConstants = [_]f32{ 0, 0, 0, 0 },
 
         .pNext = null,
         .flags = 0,
     };
 
-    const pipelineLayoutInfo = v.PipelineLayoutCreateInfo{
-        .sType = v.StructureType.PIPELINE_LAYOUT_CREATE_INFO,
+    const pipelineLayoutInfo = vk.PipelineLayoutCreateInfo{
+        .sType = vk.StructureType.PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 0,
         .pushConstantRangeCount = 0,
         .pNext = null,
@@ -600,10 +600,10 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
         // .pPushConstantRanges = null,
     };
 
-    try checkSuccess(v.vkCreatePipelineLayout(global_device, &pipelineLayoutInfo, null, &pipelineLayout));
+    try checkSuccess(vk.vkCreatePipelineLayout(global_device, &pipelineLayoutInfo, null, &pipelineLayout));
 
-    const pipelineInfo = [_]v.GraphicsPipelineCreateInfo{v.GraphicsPipelineCreateInfo{
-        .sType = v.StructureType.GRAPHICS_PIPELINE_CREATE_INFO,
+    const pipelineInfo = [_]vk.GraphicsPipelineCreateInfo{vk.GraphicsPipelineCreateInfo{
+        .sType = vk.StructureType.GRAPHICS_PIPELINE_CREATE_INFO,
         .stageCount = @intCast(u32, shaderStages.len),
         .pStages = &shaderStages,
         .pVertexInputState = &vertexInputInfo,
@@ -625,41 +625,41 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
         .basePipelineIndex = 0,
     }};
 
-    try checkSuccess(v.vkCreateGraphicsPipelines(
+    try checkSuccess(vk.vkCreateGraphicsPipelines(
         global_device,
         null,
         @intCast(u32, pipelineInfo.len),
         &pipelineInfo,
         null,
-        @as(*[1]v.Pipeline, &graphicsPipeline),
+        @as(*[1]vk.Pipeline, &graphicsPipeline),
     ));
 
-    v.vkDestroyShaderModule(global_device, fragShaderModule, null);
-    v.vkDestroyShaderModule(global_device, vertShaderModule, null);
+    vk.vkDestroyShaderModule(global_device, fragShaderModule, null);
+    vk.vkDestroyShaderModule(global_device, vertShaderModule, null);
 }
 
 fn createRenderPass() !void {
-    const colorAttachment = v.AttachmentDescription{
+    const colorAttachment = vk.AttachmentDescription{
         .format = swapChainImageFormat,
-        .samples = v.SampleCountFlagBits.T_1_BIT,
-        .loadOp = v.AttachmentLoadOp.LOAD,
-        .storeOp = v.AttachmentStoreOp.STORE,
-        .stencilLoadOp = v.AttachmentLoadOp.DONT_CARE,
-        .stencilStoreOp = v.AttachmentStoreOp.DONT_CARE,
-        .initialLayout = v.ImageLayout.UNDEFINED,
-        .finalLayout = v.ImageLayout.PRESENT_SRC_KHR,
+        .samples = vk.SampleCountFlagBits.T_1_BIT,
+        .loadOp = vk.AttachmentLoadOp.LOAD,
+        .storeOp = vk.AttachmentStoreOp.STORE,
+        .stencilLoadOp = vk.AttachmentLoadOp.DONT_CARE,
+        .stencilStoreOp = vk.AttachmentStoreOp.DONT_CARE,
+        .initialLayout = vk.ImageLayout.UNDEFINED,
+        .finalLayout = vk.ImageLayout.PRESENT_SRC_KHR,
         .flags = 0,
     };
 
-    const colorAttachmentRef = v.AttachmentReference{
+    const colorAttachmentRef = vk.AttachmentReference{
         .attachment = 0,
-        .layout = v.ImageLayout.COLOR_ATTACHMENT_OPTIMAL,
+        .layout = vk.ImageLayout.COLOR_ATTACHMENT_OPTIMAL,
     };
 
-    const subpass = [_]v.SubpassDescription{v.SubpassDescription{
-        .pipelineBindPoint = v.PipelineBindPoint.GRAPHICS,
+    const subpass = [_]vk.SubpassDescription{vk.SubpassDescription{
+        .pipelineBindPoint = vk.PipelineBindPoint.GRAPHICS,
         .colorAttachmentCount = 1,
-        .pColorAttachments = @ptrCast([*]const v.AttachmentReference, &colorAttachmentRef),
+        .pColorAttachments = @ptrCast([*]const vk.AttachmentReference, &colorAttachmentRef),
 
         .flags = 0,
         .inputAttachmentCount = 0,
@@ -670,21 +670,21 @@ fn createRenderPass() !void {
         // .pPreserveAttachments = null,
     }};
 
-    const dependency = [_]v.SubpassDependency{v.SubpassDependency{
-        .srcSubpass = v.SUBPASS_EXTERNAL,
+    const dependency = [_]vk.SubpassDependency{vk.SubpassDependency{
+        .srcSubpass = vk.SUBPASS_EXTERNAL,
         .dstSubpass = 0,
-        .srcStageMask = v.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcStageMask = vk.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT_BIT,
         .srcAccessMask = 0,
-        .dstStageMask = v.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT_BIT,
-        .dstAccessMask = v.AccessFlagBits.COLOR_ATTACHMENT_READ_BIT | v.AccessFlagBits.COLOR_ATTACHMENT_WRITE_BIT,
+        .dstStageMask = vk.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT_BIT,
+        .dstAccessMask = vk.AccessFlagBits.COLOR_ATTACHMENT_READ_BIT | vk.AccessFlagBits.COLOR_ATTACHMENT_WRITE_BIT,
 
         .dependencyFlags = 0,
     }};
 
-    const renderPassInfo = v.RenderPassCreateInfo{
-        .sType = v.StructureType.RENDER_PASS_CREATE_INFO,
+    const renderPassInfo = vk.RenderPassCreateInfo{
+        .sType = vk.StructureType.RENDER_PASS_CREATE_INFO,
         .attachmentCount = 1,
-        .pAttachments = @ptrCast(*const [1]v.AttachmentDescription, &colorAttachment),
+        .pAttachments = @ptrCast(*const [1]vk.AttachmentDescription, &colorAttachment),
         .subpassCount = 1,
         .pSubpasses = &subpass,
         .dependencyCount = 1,
@@ -694,27 +694,27 @@ fn createRenderPass() !void {
         .flags = 0,
     };
 
-    try checkSuccess(v.vkCreateRenderPass(global_device, &renderPassInfo, null, &renderPass));
+    try checkSuccess(vk.vkCreateRenderPass(global_device, &renderPassInfo, null, &renderPass));
 }
 
 fn createImageViews(allocator: *Allocator) !void {
-    swapChainImageViews = try allocator.alloc(v.ImageView, swapChainImages.len);
+    swapChainImageViews = try allocator.alloc(vk.ImageView, swapChainImages.len);
     errdefer allocator.free(swapChainImageViews);
 
     for (swapChainImages) |swap_chain_image, i| {
-        const createInfo = v.ImageViewCreateInfo{
-            .sType = v.StructureType.IMAGE_VIEW_CREATE_INFO,
+        const createInfo = vk.ImageViewCreateInfo{
+            .sType = vk.StructureType.IMAGE_VIEW_CREATE_INFO,
             .image = swap_chain_image,
-            .viewType = v.ImageViewType.T_2D,
+            .viewType = vk.ImageViewType.T_2D,
             .format = swapChainImageFormat,
-            .components = v.ComponentMapping{
-                .r = v.ComponentSwizzle.IDENTITY,
-                .g = v.ComponentSwizzle.IDENTITY,
-                .b = v.ComponentSwizzle.IDENTITY,
-                .a = v.ComponentSwizzle.IDENTITY,
+            .components = vk.ComponentMapping{
+                .r = vk.ComponentSwizzle.IDENTITY,
+                .g = vk.ComponentSwizzle.IDENTITY,
+                .b = vk.ComponentSwizzle.IDENTITY,
+                .a = vk.ComponentSwizzle.IDENTITY,
             },
-            .subresourceRange = v.ImageSubresourceRange{
-                .aspectMask = v.ImageAspectFlagBits.COLOR_BIT,
+            .subresourceRange = vk.ImageSubresourceRange{
+                .aspectMask = vk.ImageAspectFlagBits.COLOR_BIT,
                 .baseMipLevel = 0,
                 .levelCount = 1,
                 .baseArrayLayer = 0,
@@ -725,21 +725,21 @@ fn createImageViews(allocator: *Allocator) !void {
             .flags = 0,
         };
 
-        try checkSuccess(v.vkCreateImageView(global_device, &createInfo, null, &swapChainImageViews[i]));
+        try checkSuccess(vk.vkCreateImageView(global_device, &createInfo, null, &swapChainImageViews[i]));
     }
 }
 
-fn chooseSwapSurfaceFormat(availableFormats: []v.SurfaceFormatKHR) v.SurfaceFormatKHR {
-    if (availableFormats.len == 1 and availableFormats[0].format == v.Format.UNDEFINED) {
-        return v.SurfaceFormatKHR{
-            .format = v.Format.B8G8R8A8_UNORM,
-            .colorSpace = v.ColorSpaceKHR.SRGB_NONLINEAR,
+fn chooseSwapSurfaceFormat(availableFormats: []vk.SurfaceFormatKHR) vk.SurfaceFormatKHR {
+    if (availableFormats.len == 1 and availableFormats[0].format == vk.Format.UNDEFINED) {
+        return vk.SurfaceFormatKHR{
+            .format = vk.Format.B8G8R8A8_UNORM,
+            .colorSpace = vk.ColorSpaceKHR.SRGB_NONLINEAR,
         };
     }
 
     for (availableFormats) |availableFormat| {
-        if (availableFormat.format == v.Format.B8G8R8A8_UNORM and
-            availableFormat.colorSpace == v.ColorSpaceKHR.SRGB_NONLINEAR)
+        if (availableFormat.format == vk.Format.B8G8R8A8_UNORM and
+            availableFormat.colorSpace == vk.ColorSpaceKHR.SRGB_NONLINEAR)
         {
             return availableFormat;
         }
@@ -748,13 +748,13 @@ fn chooseSwapSurfaceFormat(availableFormats: []v.SurfaceFormatKHR) v.SurfaceForm
     return availableFormats[0];
 }
 
-fn chooseSwapPresentMode(availablePresentModes: []v.PresentModeKHR) v.PresentModeKHR {
-    var bestMode: v.PresentModeKHR = v.PresentModeKHR.FIFO;
+fn chooseSwapPresentMode(availablePresentModes: []vk.PresentModeKHR) vk.PresentModeKHR {
+    var bestMode: vk.PresentModeKHR = vk.PresentModeKHR.FIFO;
 
     for (availablePresentModes) |availablePresentMode| {
-        if (availablePresentMode == v.PresentModeKHR.MAILBOX) {
+        if (availablePresentMode == vk.PresentModeKHR.MAILBOX) {
             return availablePresentMode;
-        } else if (availablePresentMode == v.PresentModeKHR.IMMEDIATE) {
+        } else if (availablePresentMode == vk.PresentModeKHR.IMMEDIATE) {
             bestMode = availablePresentMode;
         }
     }
@@ -762,11 +762,11 @@ fn chooseSwapPresentMode(availablePresentModes: []v.PresentModeKHR) v.PresentMod
     return bestMode;
 }
 
-fn chooseSwapExtent(capabilities: v.SurfaceCapabilitiesKHR) v.Extent2D {
+fn chooseSwapExtent(capabilities: vk.SurfaceCapabilitiesKHR) vk.Extent2D {
     if (capabilities.currentExtent.width != maxInt(u32)) {
         return capabilities.currentExtent;
     } else {
-        var actualExtent = v.Extent2D{
+        var actualExtent = vk.Extent2D{
             .width = WIDTH,
             .height = HEIGHT,
         };
@@ -798,8 +798,8 @@ fn createSwapChain(allocator: *Allocator) !void {
 
     const different_families = indices.graphicsFamily.? != indices.presentFamily.?;
 
-    var createInfo = v.SwapchainCreateInfoKHR{
-        .sType = v.StructureType.SWAPCHAIN_CREATE_INFO_KHR,
+    var createInfo = vk.SwapchainCreateInfoKHR{
+        .sType = vk.StructureType.SWAPCHAIN_CREATE_INFO_KHR,
         .surface = surface,
 
         .minImageCount = imageCount,
@@ -807,16 +807,16 @@ fn createSwapChain(allocator: *Allocator) !void {
         .imageColorSpace = surfaceFormat.colorSpace,
         .imageExtent = extent,
         .imageArrayLayers = 1,
-        .imageUsage = v.ImageUsageFlagBits.COLOR_ATTACHMENT_BIT,
+        .imageUsage = vk.ImageUsageFlagBits.COLOR_ATTACHMENT_BIT,
 
-        .imageSharingMode = if (different_families) v.SharingMode.CONCURRENT else v.SharingMode.EXCLUSIVE,
+        .imageSharingMode = if (different_families) vk.SharingMode.CONCURRENT else vk.SharingMode.EXCLUSIVE,
         .queueFamilyIndexCount = if (different_families) @as(u32, 2) else @as(u32, 0),
         .pQueueFamilyIndices = if (different_families) &queueFamilyIndices else &([_]u32{ 0, 0 }),
 
         .preTransform = swapChainSupport.capabilities.currentTransform,
-        .compositeAlpha = v.CompositeAlphaFlagBitsKHR.OPAQUE_BIT,
+        .compositeAlpha = vk.CompositeAlphaFlagBitsKHR.OPAQUE_BIT,
         .presentMode = presentMode,
-        .clipped = v.TRUE,
+        .clipped = vk.TRUE,
 
         .oldSwapchain = null,
 
@@ -824,11 +824,11 @@ fn createSwapChain(allocator: *Allocator) !void {
         .flags = 0,
     };
 
-    try checkSuccess(v.vkCreateSwapchainKHR(global_device, &createInfo, null, &swapChain));
+    try checkSuccess(vk.vkCreateSwapchainKHR(global_device, &createInfo, null, &swapChain));
 
-    try checkSuccess(v.vkGetSwapchainImagesKHR(global_device, swapChain, &imageCount, null));
-    swapChainImages = try allocator.alloc(v.Image, imageCount);
-    try checkSuccess(v.vkGetSwapchainImagesKHR(global_device, swapChain, &imageCount, swapChainImages.ptr));
+    try checkSuccess(vk.vkGetSwapchainImagesKHR(global_device, swapChain, &imageCount, null));
+    swapChainImages = try allocator.alloc(vk.Image, imageCount);
+    try checkSuccess(vk.vkGetSwapchainImagesKHR(global_device, swapChain, &imageCount, swapChainImages.ptr));
 
     swapChainImageFormat = surfaceFormat.format;
     swapChainExtent = extent;
@@ -837,7 +837,7 @@ fn createSwapChain(allocator: *Allocator) !void {
 fn createLogicalDevice(allocator: *Allocator) !void {
     const indices = try findQueueFamilies(allocator, physicalDevice);
 
-    var queueCreateInfos = std.ArrayList(v.DeviceQueueCreateInfo).init(allocator);
+    var queueCreateInfos = std.ArrayList(vk.DeviceQueueCreateInfo).init(allocator);
     defer queueCreateInfos.deinit();
     const all_queue_families = [_]u32{ indices.graphicsFamily.?, indices.presentFamily.? };
     const uniqueQueueFamilies = if (indices.graphicsFamily.? == indices.presentFamily.?)
@@ -847,8 +847,8 @@ fn createLogicalDevice(allocator: *Allocator) !void {
 
     var queuePriority: f32 = 1.0;
     for (uniqueQueueFamilies) |queueFamily| {
-        const queueCreateInfo = v.DeviceQueueCreateInfo{
-            .sType = v.StructureType.DEVICE_QUEUE_CREATE_INFO,
+        const queueCreateInfo = vk.DeviceQueueCreateInfo{
+            .sType = vk.StructureType.DEVICE_QUEUE_CREATE_INFO,
             .queueFamilyIndex = queueFamily,
             .queueCount = 1,
             .pQueuePriorities = @ptrCast([*]const f32, &queuePriority),
@@ -858,7 +858,7 @@ fn createLogicalDevice(allocator: *Allocator) !void {
         try queueCreateInfos.append(queueCreateInfo);
     }
 
-    const deviceFeatures = v.PhysicalDeviceFeatures{
+    const deviceFeatures = vk.PhysicalDeviceFeatures{
         .robustBufferAccess = 0,
         .fullDrawIndexUint32 = 0,
         .imageCubeArray = 0,
@@ -916,8 +916,8 @@ fn createLogicalDevice(allocator: *Allocator) !void {
         .inheritedQueries = 0,
     };
 
-    const createInfo = v.DeviceCreateInfo{
-        .sType = v.StructureType.DEVICE_CREATE_INFO,
+    const createInfo = vk.DeviceCreateInfo{
+        .sType = vk.StructureType.DEVICE_CREATE_INFO,
 
         .queueCreateInfoCount = @intCast(u32, queueCreateInfos.len),
         .pQueueCreateInfos = queueCreateInfos.items.ptr,
@@ -933,92 +933,91 @@ fn createLogicalDevice(allocator: *Allocator) !void {
         .flags = 0,
     };
 
-    try checkSuccess(v.vkCreateDevice(physicalDevice, &createInfo, null, &global_device));
+    try checkSuccess(vk.vkCreateDevice(physicalDevice, &createInfo, null, &global_device));
 
-    v.vkGetDeviceQueue(global_device, indices.graphicsFamily.?, 0, &graphicsQueue);
-    v.vkGetDeviceQueue(global_device, indices.presentFamily.?, 0, &presentQueue);
+    vk.vkGetDeviceQueue(global_device, indices.graphicsFamily.?, 0, &graphicsQueue);
+    vk.vkGetDeviceQueue(global_device, indices.presentFamily.?, 0, &presentQueue);
 }
 
-fn querySwapChainSupport(allocator: *Allocator, device: v.PhysicalDevice) !SwapChainSupportDetails {
+fn querySwapChainSupport(allocator: *Allocator, device: vk.PhysicalDevice) !SwapChainSupportDetails {
     var details = SwapChainSupportDetails.init(allocator);
 
-    try checkSuccess(v.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities));
+    try checkSuccess(vk.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities));
 
     var formatCount: u32 = undefined;
-    try checkSuccess(v.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, null));
+    try checkSuccess(vk.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, null));
 
     if (formatCount != 0) {
         try details.formats.resize(formatCount);
-        try checkSuccess(v.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.items.ptr));
+        try checkSuccess(vk.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.items.ptr));
     }
 
     var presentModeCount: u32 = undefined;
-    try checkSuccess(v.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, null));
+    try checkSuccess(vk.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, null));
 
     if (presentModeCount != 0) {
         try details.presentModes.resize(presentModeCount);
-        try checkSuccess(v.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.items.ptr));
+        try checkSuccess(vk.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.items.ptr));
     }
 
     return details;
 }
 
 extern fn debugCallback(
-    flags: v.DebugReportFlagsEXT,
-    objType: v.DebugReportObjectTypeEXT,
+    flags: vk.DebugReportFlagsEXT,
+    objType: vk.DebugReportObjectTypeEXT,
     obj: u64,
     location: usize,
     code: i32,
     layerPrefix: ?[*]const u8,
     msg: ?[*]const u8,
     userData: ?*c_void,
-) v.Bool32 {
+) vk.Bool32 {
     std.debug.warn("validation layer: {s}\n", .{@ptrCast([*:0] const u8, msg)});
-    return v.FALSE;
+    return vk.FALSE;
 }
 
 fn setupDebugCallback() error{FailedToSetUpDebugCallback}!void {
     if (!enableValidationLayers) return;
 
-    var createInfo = v.DebugReportCallbackCreateInfoEXT{
-        .sType = v.StructureType.DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
-        .flags = v.DebugReportFlagBitsEXT.ERROR_BIT | v.DebugReportFlagBitsEXT.WARNING_BIT,
+    var createInfo = vk.DebugReportCallbackCreateInfoEXT{
+        .sType = vk.StructureType.DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
+        .flags = vk.DebugReportFlagBitsEXT.ERROR_BIT | vk.DebugReportFlagBitsEXT.WARNING_BIT,
         .pfnCallback = debugCallback,
         .pNext = null,
         .pUserData = null,
     };
 
-    // if (CreateDebugReportCallbackEXT(&createInfo, null, &callback) != v.Result.SUCCESS) {
-    //     return error.FailedToSetUpDebugCallback;
-    // }
+    if (CreateDebugReportCallbackEXT(&createInfo, null, &callback) != vk.Result.SUCCESS) {
+        return error.FailedToSetUpDebugCallback;
+    }
 }
 
-// fn DestroyDebugReportCallbackEXT(
-//     pAllocator: ?*const v.AllocationCallbacks,
-// ) void {
-//     const func = @ptrCast(v.vkDestroyDebugReportCallbackEXT, v.vkGetInstanceProcAddr(
-//         instance,
-//         "vkDestroyDebugReportCallbackEXT",
-//     )) orelse unreachable;
-//     func(instance, callback, pAllocator);
-// }
+fn DestroyDebugReportCallbackEXT(
+    pAllocator: ?*const vk.AllocationCallbacks,
+) void {
+    const func = @ptrCast(?@TypeOf(vk.vkDestroyDebugReportCallbackEXT), vk.GetInstanceProcAddr(
+        instance,
+        "vkDestroyDebugReportCallbackEXT",
+    )) orelse unreachable;
+    func(instance, callback, pAllocator);
+}
 
 fn CreateDebugReportCallbackEXT(
-    pCreateInfo: *const v.DebugReportCallbackCreateInfoEXT,
-    pAllocator: ?*const v.AllocationCallbacks,
-    pCallback: *v.DebugReportCallbackEXT,
-) v.Result {
-    const func = @ptrCast(v.vkCreateDebugReportCallbackEXT, v.vkGetInstanceProcAddr(
+    pCreateInfo: *const vk.DebugReportCallbackCreateInfoEXT,
+    pAllocator: ?*const vk.AllocationCallbacks,
+    pCallback: *vk.DebugReportCallbackEXT,
+) vk.Result {
+    const func = @ptrCast(?@TypeOf(vk.vkCreateDebugReportCallbackEXT), vk.GetInstanceProcAddr(
         instance,
         "vkCreateDebugReportCallbackEXT",
-    )) orelse return v.Result.ERROR_EXTENSION_NOT_PRESENT;
-
+    )) orelse return .ERROR_EXTENSION_NOT_PRESENT;
     return func(instance, pCreateInfo, pAllocator, pCallback);
 }
 
-fn checkSuccess(result: v.Result) !void {
+fn checkSuccess(result: vk.Result) !void {
     switch (result) {
-        v.Result.SUCCESS => {},
+        vk.Result.SUCCESS => {},
         else => return error.Unexpected,
     }
 }
@@ -1026,12 +1025,12 @@ fn checkSuccess(result: v.Result) !void {
 fn checkValidationLayerSupport(allocator: *Allocator) !bool {
     var layerCount: u32 = undefined;
 
-    try checkSuccess(v.vkEnumerateInstanceLayerProperties(&layerCount, null));
+    try checkSuccess(vk.vkEnumerateInstanceLayerProperties(&layerCount, null));
 
-    const availableLayers = try allocator.alloc(v.LayerProperties, layerCount);
+    const availableLayers = try allocator.alloc(vk.LayerProperties, layerCount);
     defer allocator.free(availableLayers);
 
-    try checkSuccess(v.vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.ptr));
+    try checkSuccess(vk.vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.ptr));
 
     for (validationLayers) |layerName| {
         var layerFound = false;
@@ -1052,19 +1051,19 @@ fn checkValidationLayerSupport(allocator: *Allocator) !bool {
 }
 
 fn drawFrame() !void {
-    try checkSuccess(v.vkWaitForFences(global_device, 1, @as(*[1]v.Fence, &inFlightFences[currentFrame]), v.TRUE, maxInt(u64)));
-    try checkSuccess(v.vkResetFences(global_device, 1, @as(*[1]v.Fence, &inFlightFences[currentFrame])));
+    try checkSuccess(vk.vkWaitForFences(global_device, 1, @as(*[1]vk.Fence, &inFlightFences[currentFrame]), vk.TRUE, maxInt(u64)));
+    try checkSuccess(vk.vkResetFences(global_device, 1, @as(*[1]vk.Fence, &inFlightFences[currentFrame])));
 
     var imageIndex: u32 = undefined;
-    try checkSuccess(v.vkAcquireNextImageKHR(global_device, swapChain, maxInt(u64), imageAvailableSemaphores[currentFrame], null, &imageIndex));
+    try checkSuccess(vk.vkAcquireNextImageKHR(global_device, swapChain, maxInt(u64), imageAvailableSemaphores[currentFrame], null, &imageIndex));
 
-    var waitSemaphores = [_]v.Semaphore{imageAvailableSemaphores[currentFrame]};
-    var waitStages = [_]v.PipelineStageFlags{v.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT_BIT};
+    var waitSemaphores = [_]vk.Semaphore{imageAvailableSemaphores[currentFrame]};
+    var waitStages = [_]vk.PipelineStageFlags{vk.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT_BIT};
 
-    const signalSemaphores = [_]v.Semaphore{renderFinishedSemaphores[currentFrame]};
+    const signalSemaphores = [_]vk.Semaphore{renderFinishedSemaphores[currentFrame]};
 
-    var submitInfo = [_]v.SubmitInfo{v.SubmitInfo{
-        .sType = v.StructureType.SUBMIT_INFO,
+    var submitInfo = [_]vk.SubmitInfo{vk.SubmitInfo{
+        .sType = vk.StructureType.SUBMIT_INFO,
         .waitSemaphoreCount = 1,
         .pWaitSemaphores = &waitSemaphores,
         .pWaitDstStageMask = &waitStages,
@@ -1076,11 +1075,11 @@ fn drawFrame() !void {
         .pNext = null,
     }};
 
-    try checkSuccess(v.vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]));
+    try checkSuccess(vk.vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]));
 
-    const swapChains = [_]v.SwapchainKHR{swapChain};
-    const presentInfo = v.PresentInfoKHR{
-        .sType = v.StructureType.PRESENT_INFO_KHR,
+    const swapChains = [_]vk.SwapchainKHR{swapChain};
+    const presentInfo = vk.PresentInfoKHR{
+        .sType = vk.StructureType.PRESENT_INFO_KHR,
 
         .waitSemaphoreCount = 1,
         .pWaitSemaphores = &signalSemaphores,
@@ -1094,7 +1093,7 @@ fn drawFrame() !void {
         .pResults = null,
     };
 
-    try checkSuccess(v.vkQueuePresentKHR(presentQueue, &presentInfo));
+    try checkSuccess(vk.vkQueuePresentKHR(presentQueue, &presentInfo));
 
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
