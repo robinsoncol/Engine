@@ -1,5 +1,5 @@
 const std = @import("std");
-const assert = std.debuglfw.assert;
+const assert = std.debug.assert;
 const mem = std.mem;
 const Allocator = mem.Allocator;
 const maxInt = std.math.maxInt;
@@ -166,7 +166,7 @@ fn listExtensions(allocator: *Allocator) !void {
     try checkSuccess(vk.vkEnumerateInstanceExtensionProperties(null, &extensionCount, extensions.ptr));
 
     for (extensions) |extension, i| {
-        std.debuglfw.warn("Extensions({}): {}\n", .{ i, extension.extensionName });
+        std.debug.warn("Extensions({}): {}\n", .{ i, extension.extensionName });
     }
 }
 
@@ -236,7 +236,7 @@ fn createSurface(window: *glfw.GLFWwindow) !void {
     }
 }
 
-// Currently reviewinglfw...
+// Currently reviewing...
 
 fn pickPhysicalDevice(allocator: *Allocator) !void {
     var deviceCount: u32 = 0;
@@ -463,7 +463,7 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
     const vertShaderCode = try std.fs.cwd().readFileAllocAligned(allocator, "shaders\\vert.spv", 1<<20, @alignOf(u32));
     defer allocator.free(vertShaderCode);
 
-    const fragShaderCode = try std.fs.cwd().readFileAllocAligned(allocator, "shaders\\fraglfw.spv", 1<<20, @alignOf(u32));
+    const fragShaderCode = try std.fs.cwd().readFileAllocAligned(allocator, "shaders\\frag.spv", 1<<20, @alignOf(u32));
     defer allocator.free(fragShaderCode);
 
     const vertShaderModule = try createShaderModule(vertShaderCode);
@@ -642,7 +642,7 @@ fn createRenderPass() !void {
     const colorAttachment = vk.AttachmentDescription{
         .format = swapChainImageFormat,
         .samples = vk.SampleCountFlagBits.T_1_BIT,
-        .loadOp = vk.AttachmentLoadOp.LOAD,
+        .loadOp = vk.AttachmentLoadOp.DONT_CARE, // Was LOAD
         .storeOp = vk.AttachmentStoreOp.STORE,
         .stencilLoadOp = vk.AttachmentLoadOp.DONT_CARE,
         .stencilStoreOp = vk.AttachmentStoreOp.DONT_CARE,

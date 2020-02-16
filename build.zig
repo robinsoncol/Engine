@@ -31,7 +31,7 @@ pub fn build(b: *Builder) !void {
     b.installArtifact(exe);
 
     try addShader(b, exe, "shader.vert", "vert.spv");
-    try addShader(b, exe, "shader.frag", "fraglfw.spv");
+    try addShader(b, exe, "shader.frag", "frag.spv");
 }
 
 fn addShader(b: *Builder, exe: var, in_file: []const u8, out_file: []const u8) !void {

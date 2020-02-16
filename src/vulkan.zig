@@ -19,13 +19,13 @@
 //
 //
 
-const assert = @import("std").debuglfw.assert;
+const assert = @import("std").debug.assert;
 pub const CString = [*]const u8;
 
 pub const VERSION_1_0 = 1;
 pub fn MAKE_VERSION(major: u32, minor: u32, patch: u32) u32 { return @shlExact(major, 22) | @shlExact(minor, 12) | patch; }
 
-// DEPRECATED: This define has been removed. Specific version defines (e.glfw. VK_API_VERSION_1_0), or the VK_MAKE_VERSION macro, should be used instead.
+// DEPRECATED: This define has been removed. Specific version defines (e.g. VK_API_VERSION_1_0), or the VK_MAKE_VERSION macro, should be used instead.
 //pub const API_VERSION = MAKE_VERSION(1, 0, 0); // Patch version should always be set to 0
 
 // Vulkan 1.0 version number
