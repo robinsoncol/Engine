@@ -66,7 +66,7 @@ const SwapChainSupportDetails = struct {
             .formats = std.ArrayList(vk.SurfaceFormatKHR).init(allocator),
             .presentModes = std.ArrayList(vk.PresentModeKHR).init(allocator),
         };
-        const slice = @sliceToBytes(@as(*[1]vk.SurfaceCapabilitiesKHR, &result.capabilities)[0..1]);
+        const slice = std.mem.sliceAsBytes(@as(*[1]vk.SurfaceCapabilitiesKHR, &result.capabilities)[0..1]);
         std.mem.set(u8, slice, 0);
         return result;
     }
@@ -138,7 +138,10 @@ fn initVulkan(allocator: *Allocator, window: *glfw.GLFWwindow) !void {
     try createSurface(window);
     try pickPhysicalDevice(allocator);
     try createLogicalDevice(allocator);
+
+    // A swap chain is a queue of images that are waiting to be presented to the screen
     try createSwapChain(allocator);
+
     try createImageViews(allocator);
     try createRenderPass();
     try createGraphicsPipeline(allocator);
@@ -418,7 +421,7 @@ fn createShaderModule(code: []align(@alignOf(u32)) const u8) !vk.ShaderModule {
     const createInfo = vk.ShaderModuleCreateInfo{
         .sType = vk.StructureType.SHADER_MODULE_CREATE_INFO,
         .codeSize = code.len,
-        .pCode = @bytesToSlice(u32, code).ptr,
+        .pCode = std.mem.bytesAsSlice(u32, code).ptr,
 
         .pNext = null,
         .flags = 0,
@@ -438,14 +441,16 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
     defer allocator.free(fragShaderCode);
 
     const vertShaderModule = try createShaderModule(vertShaderCode);
+    defer vk.vkDestroyShaderModule(globalDevice, vertShaderModule, null);
+
     const fragShaderModule = try createShaderModule(fragShaderCode);
+    defer vk.vkDestroyShaderModule(globalDevice, fragShaderModule, null);
 
     const vertShaderStageInfo = vk.PipelineShaderStageCreateInfo{
         .sType = vk.StructureType.PIPELINE_SHADER_STAGE_CREATE_INFO,
         .stage = vk.ShaderStageFlagBits.VERTEX_BIT,
         .module = vertShaderModule,
         .pName = "main",
-
         .pNext = null,
         .flags = 0,
         .pSpecializationInfo = null,
@@ -458,7 +463,6 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
         .pName = "main",
         .pNext = null,
         .flags = 0,
-
         .pSpecializationInfo = null,
     };
 
@@ -468,9 +472,8 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
         .sType = vk.StructureType.PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .vertexBindingDescriptionCount = 0,
         .vertexAttributeDescriptionCount = 0,
-
-        // .pVertexBindingDescriptions = null,
-        // .pVertexAttributeDescriptions = null,
+        .pVertexBindingDescriptions = undefined,
+        .pVertexAttributeDescriptions = undefined,
         .pNext = null,
         .flags = 0,
     };
@@ -503,7 +506,6 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
         .pViewports = &viewport,
         .scissorCount = 1,
         .pScissors = &scissor,
-
         .pNext = null,
         .flags = 0,
     };
@@ -517,7 +519,6 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
         .cullMode = vk.CullModeFlagBits.BACK_BIT,
         .frontFace = vk.FrontFace.CLOCKWISE,
         .depthBiasEnable = vk.FALSE,
-
         .pNext = null,
         .flags = 0,
         .depthBiasConstantFactor = 0,
@@ -556,7 +557,6 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
         .attachmentCount = 1,
         .pAttachments = @ptrCast([*]const vk.PipelineColorBlendAttachmentState, &colorBlendAttachment),
         .blendConstants = [_]f32{ 0, 0, 0, 0 },
-
         .pNext = null,
         .flags = 0,
     };
@@ -567,8 +567,8 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
         .pushConstantRangeCount = 0,
         .pNext = null,
         .flags = 0,
-        // .pSetLayouts = null,
-        // .pPushConstantRanges = null,
+        .pSetLayouts = undefined,
+        .pPushConstantRanges = undefined,
     };
 
     try checkSuccess(vk.vkCreatePipelineLayout(globalDevice, &pipelineLayoutInfo, null, &pipelineLayout));
@@ -587,7 +587,6 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
         .renderPass = renderPass,
         .subpass = 0,
         .basePipelineHandle = null,
-
         .pNext = null,
         .flags = 0,
         .pTessellationState = null,
@@ -604,9 +603,6 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
         null,
         @as(*[1]vk.Pipeline, &graphicsPipeline),
     ));
-
-    vk.vkDestroyShaderModule(globalDevice, fragShaderModule, null);
-    vk.vkDestroyShaderModule(globalDevice, vertShaderModule, null);
 }
 
 fn createRenderPass() !void {
@@ -634,11 +630,11 @@ fn createRenderPass() !void {
 
         .flags = 0,
         .inputAttachmentCount = 0,
-        // .pInputAttachments = null,
+        .pInputAttachments = undefined,
         .pResolveAttachments = null,
         .pDepthStencilAttachment = null,
         .preserveAttachmentCount = 0,
-        // .pPreserveAttachments = null,
+        .pPreserveAttachments = undefined,
     }};
 
     const dependency = [_]vk.SubpassDependency{vk.SubpassDependency{
@@ -666,87 +662,6 @@ fn createRenderPass() !void {
     };
 
     try checkSuccess(vk.vkCreateRenderPass(globalDevice, &renderPassInfo, null, &renderPass));
-}
-
-fn createImageViews(allocator: *Allocator) !void {
-    swapChainImageViews = try allocator.alloc(vk.ImageView, swapChainImages.len);
-    errdefer allocator.free(swapChainImageViews);
-
-    for (swapChainImages) |swap_chain_image, i| {
-        const createInfo = vk.ImageViewCreateInfo{
-            .sType = vk.StructureType.IMAGE_VIEW_CREATE_INFO,
-            .image = swap_chain_image,
-            .viewType = vk.ImageViewType.T_2D,
-            .format = swapChainImageFormat,
-            .components = vk.ComponentMapping{
-                .r = vk.ComponentSwizzle.IDENTITY,
-                .g = vk.ComponentSwizzle.IDENTITY,
-                .b = vk.ComponentSwizzle.IDENTITY,
-                .a = vk.ComponentSwizzle.IDENTITY,
-            },
-            .subresourceRange = vk.ImageSubresourceRange{
-                .aspectMask = vk.ImageAspectFlagBits.COLOR_BIT,
-                .baseMipLevel = 0,
-                .levelCount = 1,
-                .baseArrayLayer = 0,
-                .layerCount = 1,
-            },
-
-            .pNext = null,
-            .flags = 0,
-        };
-
-        try checkSuccess(vk.vkCreateImageView(globalDevice, &createInfo, null, &swapChainImageViews[i]));
-    }
-}
-
-fn chooseSwapSurfaceFormat(availableFormats: []vk.SurfaceFormatKHR) vk.SurfaceFormatKHR {
-    if (availableFormats.len == 1 and availableFormats[0].format == vk.Format.UNDEFINED) {
-        return vk.SurfaceFormatKHR{
-            .format = vk.Format.B8G8R8A8_UNORM,
-            .colorSpace = vk.ColorSpaceKHR.SRGB_NONLINEAR,
-        };
-    }
-
-    for (availableFormats) |availableFormat| {
-        if (availableFormat.format == vk.Format.B8G8R8A8_UNORM and
-            availableFormat.colorSpace == vk.ColorSpaceKHR.SRGB_NONLINEAR)
-        {
-            return availableFormat;
-        }
-    }
-
-    return availableFormats[0];
-}
-
-fn chooseSwapPresentMode(availablePresentModes: []vk.PresentModeKHR) vk.PresentModeKHR {
-    var bestMode: vk.PresentModeKHR = vk.PresentModeKHR.FIFO;
-
-    for (availablePresentModes) |availablePresentMode| {
-        if (availablePresentMode == vk.PresentModeKHR.MAILBOX) {
-            return availablePresentMode;
-        } else if (availablePresentMode == vk.PresentModeKHR.IMMEDIATE) {
-            bestMode = availablePresentMode;
-        }
-    }
-
-    return bestMode;
-}
-
-fn chooseSwapExtent(capabilities: vk.SurfaceCapabilitiesKHR) vk.Extent2D {
-    if (capabilities.currentExtent.width != maxInt(u32)) {
-        return capabilities.currentExtent;
-    } else {
-        var actualExtent = vk.Extent2D{
-            .width = WIDTH,
-            .height = HEIGHT,
-        };
-
-        actualExtent.width = std.math.max(capabilities.minImageExtent.width, std.math.min(capabilities.maxImageExtent.width, actualExtent.width));
-        actualExtent.height = std.math.max(capabilities.minImageExtent.height, std.math.min(capabilities.maxImageExtent.height, actualExtent.height));
-
-        return actualExtent;
-    }
 }
 
 fn createSwapChain(allocator: *Allocator) !void {
@@ -803,6 +718,111 @@ fn createSwapChain(allocator: *Allocator) !void {
 
     swapChainImageFormat = surfaceFormat.format;
     swapChainExtent = extent;
+}
+
+fn chooseSwapSurfaceFormat(availableFormats: []vk.SurfaceFormatKHR) vk.SurfaceFormatKHR {
+    if (availableFormats.len == 1 and availableFormats[0].format == vk.Format.UNDEFINED) {
+        return vk.SurfaceFormatKHR{
+            .format = vk.Format.B8G8R8A8_UNORM,
+            .colorSpace = vk.ColorSpaceKHR.SRGB_NONLINEAR,
+        };
+    }
+
+    for (availableFormats) |availableFormat| {
+        if (availableFormat.format == vk.Format.B8G8R8A8_UNORM and
+            availableFormat.colorSpace == vk.ColorSpaceKHR.SRGB_NONLINEAR)
+        {
+            return availableFormat;
+        }
+    }
+
+    return availableFormats[0];
+}
+
+fn querySwapChainSupport(allocator: *Allocator, device: vk.PhysicalDevice) !SwapChainSupportDetails {
+    var details = SwapChainSupportDetails.init(allocator);
+
+    try checkSuccess(vk.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities));
+
+    var formatCount: u32 = undefined;
+    try checkSuccess(vk.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, null));
+
+    if (formatCount != 0) {
+        try details.formats.resize(formatCount);
+        try checkSuccess(vk.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.items.ptr));
+    }
+
+    var presentModeCount: u32 = undefined;
+    try checkSuccess(vk.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, null));
+
+    if (presentModeCount != 0) {
+        try details.presentModes.resize(presentModeCount);
+        try checkSuccess(vk.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.items.ptr));
+    }
+
+    return details;
+}
+
+fn chooseSwapPresentMode(availablePresentModes: []vk.PresentModeKHR) vk.PresentModeKHR {
+    var bestMode: vk.PresentModeKHR = vk.PresentModeKHR.FIFO;
+
+    for (availablePresentModes) |availablePresentMode| {
+        if (availablePresentMode == vk.PresentModeKHR.MAILBOX) {
+            return availablePresentMode;
+        } else if (availablePresentMode == vk.PresentModeKHR.IMMEDIATE) {
+            bestMode = availablePresentMode;
+        }
+    }
+
+    return bestMode;
+}
+
+fn chooseSwapExtent(capabilities: vk.SurfaceCapabilitiesKHR) vk.Extent2D {
+    if (capabilities.currentExtent.width != maxInt(u32)) {
+        return capabilities.currentExtent;
+    } else {
+        var actualExtent = vk.Extent2D{
+            .width = WIDTH,
+            .height = HEIGHT,
+        };
+
+        actualExtent.width = std.math.max(capabilities.minImageExtent.width, std.math.min(capabilities.maxImageExtent.width, actualExtent.width));
+        actualExtent.height = std.math.max(capabilities.minImageExtent.height, std.math.min(capabilities.maxImageExtent.height, actualExtent.height));
+
+        return actualExtent;
+    }
+}
+
+fn createImageViews(allocator: *Allocator) !void {
+    swapChainImageViews = try allocator.alloc(vk.ImageView, swapChainImages.len);
+    errdefer allocator.free(swapChainImageViews);
+
+    for (swapChainImages) |swap_chain_image, i| {
+        const createInfo = vk.ImageViewCreateInfo{
+            .sType = vk.StructureType.IMAGE_VIEW_CREATE_INFO,
+            .image = swap_chain_image,
+            .viewType = vk.ImageViewType.T_2D,
+            .format = swapChainImageFormat,
+            .components = vk.ComponentMapping{
+                .r = vk.ComponentSwizzle.IDENTITY,
+                .g = vk.ComponentSwizzle.IDENTITY,
+                .b = vk.ComponentSwizzle.IDENTITY,
+                .a = vk.ComponentSwizzle.IDENTITY,
+            },
+            .subresourceRange = vk.ImageSubresourceRange{
+                .aspectMask = vk.ImageAspectFlagBits.COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+
+            .pNext = null,
+            .flags = 0,
+        };
+
+        try checkSuccess(vk.vkCreateImageView(globalDevice, &createInfo, null, &swapChainImageViews[i]));
+    }
 }
 
 fn createLogicalDevice(allocator: *Allocator) !void {
@@ -910,31 +930,7 @@ fn createLogicalDevice(allocator: *Allocator) !void {
     vk.vkGetDeviceQueue(globalDevice, indices.presentFamily.?, 0, &presentQueue);
 }
 
-fn querySwapChainSupport(allocator: *Allocator, device: vk.PhysicalDevice) !SwapChainSupportDetails {
-    var details = SwapChainSupportDetails.init(allocator);
-
-    try checkSuccess(vk.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities));
-
-    var formatCount: u32 = undefined;
-    try checkSuccess(vk.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, null));
-
-    if (formatCount != 0) {
-        try details.formats.resize(formatCount);
-        try checkSuccess(vk.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.items.ptr));
-    }
-
-    var presentModeCount: u32 = undefined;
-    try checkSuccess(vk.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, null));
-
-    if (presentModeCount != 0) {
-        try details.presentModes.resize(presentModeCount);
-        try checkSuccess(vk.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.items.ptr));
-    }
-
-    return details;
-}
-
-extern fn debugCallback(
+fn debugCallback(
     flags: vk.DebugReportFlagsEXT,
     objType: vk.DebugReportObjectTypeEXT,
     obj: u64,
@@ -943,7 +939,7 @@ extern fn debugCallback(
     layerPrefix: ?[*]const u8,
     msg: ?[*]const u8,
     userData: ?*c_void,
-) vk.Bool32 {
+) callconv(.C) vk.Bool32 {
     std.debug.warn("validation layer: {s}\n", .{@ptrCast([*:0] const u8, msg)});
     return vk.FALSE;
 }

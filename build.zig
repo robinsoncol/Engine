@@ -9,7 +9,7 @@ pub fn build(b: *Builder) !void {
     const exe = b.addExecutable("main", "src/main.zig");
     exe.setBuildMode(mode);
 
-    switch (builtin.os) {
+    switch (std.Target.current.os.tag) {
         .windows => {
             exe.linkSystemLibrary("./platforms/windows/libs/glfw3");
             exe.linkSystemLibrary("./platforms/windows/libs/vulkan-1");
