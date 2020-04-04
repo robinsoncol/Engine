@@ -34,6 +34,8 @@ var graphicsPipeline: vk.Pipeline = undefined;
 var swapChainFramebuffers: []vk.Framebuffer = undefined;
 var commandPool: vk.CommandPool = undefined;
 var commandBuffers: []vk.CommandBuffer = undefined;
+var vertexBuffer: vk.Buffer = undefined;
+var vertexBufferMemory:  vk.DeviceMemory = undefined;
 
 var imageAvailableSemaphores: [MAX_FRAMES_IN_FLIGHT]vk.Semaphore = undefined;
 var renderFinishedSemaphores: [MAX_FRAMES_IN_FLIGHT]vk.Semaphore = undefined;
@@ -74,6 +76,57 @@ const SwapChainSupportDetails = struct {
     fn deinit(self: *SwapChainSupportDetails) void {
         self.formats.deinit();
         self.presentModes.deinit();
+    }
+};
+
+const Vertex = packed struct {
+    // Attributes to be passed to the vertex shader
+    position: [2]f32,
+    color: [3]f32,
+
+    pub fn getBindingDescriptions() [1]vk.VertexInputBindingDescription {
+        return [1]vk.VertexInputBindingDescription{
+            vk.VertexInputBindingDescription{
+                .binding = 0,
+                .stride = @sizeOf(Vertex),
+                .inputRate = vk.VertexInputRate.VERTEX
+            }
+        };
+    }
+
+    // An attribute description struct describes how to extract a vertex attribute from a chunk of vertex data originating from a binding description
+    pub fn getAttributeDescriptions() [2]vk.VertexInputAttributeDescription {
+        return [2]vk.VertexInputAttributeDescription{
+            vk.VertexInputAttributeDescription{
+                .binding = 0,
+                // References the location in the vertex shader
+                .location = 0,
+                // Oddly, we use color formats to describe an attribute
+                .format = vk.Format.R32G32_SFLOAT,
+                .offset = @byteOffsetOf(Vertex, "position")
+            },
+            vk.VertexInputAttributeDescription{
+                .binding = 0,
+                .location = 1,
+                .format = vk.Format.R32G32B32_SFLOAT,
+                .offset = @byteOffsetOf(Vertex, "color")
+            }
+        };
+    }
+};
+
+const vertices = [_]Vertex{
+    Vertex {
+        .position = [_]f32{ 0.0, -0.5 },
+        .color = [_]f32{ 1.0, 0.0, 0.0 }
+    },
+    Vertex {
+        .position = [_]f32{ 0.5, 0.5},
+        .color = [_]f32{ 0.0, 1.0, 0.0 }
+    },
+    Vertex {
+        .position = [_]f32{ -0.5, 0.5 },
+        .color = [_]f32{ 0.0, 0.0, 1.0 }
     }
 };
 
@@ -122,6 +175,10 @@ fn cleanup() void {
     }
 
     vk.vkDestroySwapchainKHR(globalDevice, swapChain, null);
+
+    vk.vkDestroyBuffer(globalDevice, vertexBuffer, null);
+    vk.vkFreeMemory(globalDevice, vertexBufferMemory, null);
+
     vk.vkDestroyDevice(globalDevice, null);
 
     if (enableValidationLayers) {
@@ -145,10 +202,58 @@ fn initVulkan(allocator: *Allocator, window: *glfw.GLFWwindow) !void {
     try createImageViews(allocator);
     try createRenderPass();
     try createGraphicsPipeline(allocator);
+
+    // A framebuffer (frame buffer, or sometimes framestore) is a portion of random-access memory (RAM) containing a bitmap
+    // that drives a video display. It is a memory buffer containing a complete frame of data. Modern video cards contain
+    // framebuffer circuitry in their cores. This circuitry converts an in-memory bitmap into a video signal that can be
+    // displayed on a computer monitor.
     try createFramebuffers(allocator);
     try createCommandPool(allocator);
+    try createVertexBuffer(allocator);
     try createCommandBuffers(allocator);
     try createSyncObjects();
+}
+
+fn createVertexBuffer(allocator: *Allocator) !void {
+    const bufferInfo = vk.BufferCreateInfo{
+        .sType = vk.StructureType.BUFFER_CREATE_INFO,
+        .size = @sizeOf(Vertex) * vertices.len,
+        .usage = vk.BufferUsageFlagBits.VERTEX_BUFFER_BIT,
+        .sharingMode = vk.SharingMode.EXCLUSIVE
+    };
+
+    try checkSuccess(vk.vkCreateBuffer(globalDevice, &bufferInfo, null, &vertexBuffer));
+
+    var memoryRequirements : vk.MemoryRequirements = undefined;
+    vk.vkGetBufferMemoryRequirements(globalDevice, vertexBuffer, &memoryRequirements);
+
+    const allocInfo = vk.MemoryAllocateInfo{
+        .sType = vk.StructureType.MEMORY_ALLOCATE_INFO,
+        .allocationSize = memoryRequirements.size,
+        .memoryTypeIndex = try findMemoryType(memoryRequirements.memoryTypeBits, vk.MemoryPropertyFlagBits.HOST_VISIBLE_BIT | vk.MemoryPropertyFlagBits.HOST_COHERENT_BIT)
+    };
+
+    try checkSuccess(vk.vkAllocateMemory(globalDevice, &allocInfo, null, &vertexBufferMemory));
+
+    try checkSuccess(vk.vkBindBufferMemory(globalDevice, vertexBuffer, vertexBufferMemory, 0));
+
+    var data : *c_void = undefined;
+    try checkSuccess(vk.vkMapMemory(globalDevice, vertexBufferMemory, 0, bufferInfo.size, 0, &data));
+    @memcpy(@ptrCast([*]u8, data), @ptrCast([*] const u8, &vertices), bufferInfo.size);
+    vk.vkUnmapMemory(globalDevice, vertexBufferMemory);
+}
+
+fn findMemoryType(typeFilter: u32, properties: vk.FormatFeatureFlags) !u32 {
+    var memoryProperties: vk.PhysicalDeviceMemoryProperties = undefined;
+    vk.vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+
+    var i: u32 = 0;
+    while (i < memoryProperties.memoryTypeCount) : (i += 1) {
+       const value = @floatToInt(u32, @exp2(@intToFloat(f32, i)));
+        if ((typeFilter & value) != 0 and (memoryProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+            return i;
+        }
+    } else return error.FailedToFindSuitableMemoryType;
 }
 
 fn createInstance(allocator: *Allocator) !void {
@@ -178,7 +283,7 @@ fn createInstance(allocator: *Allocator) !void {
         .enabledExtensionCount = @intCast(u32, extensions.len),
         .ppEnabledExtensionNames = extensions.ptr,
 
-        // Here we pass the layers that we want to enable
+        // Validation layers that we want to enable
         .enabledLayerCount = if (enableValidationLayers) @intCast(u32, validationLayers.len) else 0,
         .ppEnabledLayerNames = if (enableValidationLayers) &validationLayers else null,
 
@@ -351,6 +456,11 @@ fn createCommandBuffers(allocator: *Allocator) !void {
         vk.vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, vk.SubpassContents.INLINE);
         {
             vk.vkCmdBindPipeline(commandBuffers[i], vk.PipelineBindPoint.GRAPHICS, graphicsPipeline);
+
+            const vertexBuffers= [1]vk.Buffer{ vertexBuffer };
+            const offsets = [1]vk.DeviceSize{ 0 };
+            vk.vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, &vertexBuffers, &offsets);
+
             vk.vkCmdDraw(commandBuffers[i], 3, 1, 0, 0);
         }
         vk.vkCmdEndRenderPass(commandBuffers[i]);
@@ -468,12 +578,15 @@ fn createGraphicsPipeline(allocator: *Allocator) !void {
 
     const shaderStages = [_]vk.PipelineShaderStageCreateInfo{ vertShaderStageInfo, fragShaderStageInfo };
 
+    const bindingDescriptions = Vertex.getBindingDescriptions();
+    const attributeDescriptions = Vertex.getAttributeDescriptions();
+
     const vertexInputInfo = vk.PipelineVertexInputStateCreateInfo{
         .sType = vk.StructureType.PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        .vertexBindingDescriptionCount = 0,
-        .vertexAttributeDescriptionCount = 0,
-        .pVertexBindingDescriptions = undefined,
-        .pVertexAttributeDescriptions = undefined,
+        .vertexBindingDescriptionCount = 1,
+        .vertexAttributeDescriptionCount = attributeDescriptions.len,
+        .pVertexBindingDescriptions = &bindingDescriptions,
+        .pVertexAttributeDescriptions = &attributeDescriptions,
         .pNext = null,
         .flags = 0,
     };
