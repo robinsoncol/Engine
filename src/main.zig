@@ -351,7 +351,7 @@ fn isDeviceSuitable(allocator: *Allocator, device: vk.PhysicalDevice) !bool {
     if (extensionsSupported) {
         var swapChainSupport = try querySwapChainSupport(allocator, device);
         defer swapChainSupport.deinit();
-        swapChainAdequate = swapChainSupport.formats.len != 0 and swapChainSupport.presentModes.len != 0;
+        swapChainAdequate = swapChainSupport.formats.items.len != 0 and swapChainSupport.presentModes.items.len != 0;
     }
 
     return indices.isComplete() and extensionsSupported and swapChainAdequate;
@@ -781,8 +781,8 @@ fn createSwapChain(allocator: *Allocator) !void {
     var swapChainSupport = try querySwapChainSupport(allocator, physicalDevice);
     defer swapChainSupport.deinit();
 
-    const surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats.toSlice());
-    const presentMode = chooseSwapPresentMode(swapChainSupport.presentModes.toSlice());
+    const surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats.items);
+    const presentMode = chooseSwapPresentMode(swapChainSupport.presentModes.items);
     const extent = chooseSwapExtent(swapChainSupport.capabilities);
 
     var imageCount: u32 = swapChainSupport.capabilities.minImageCount + 1;
@@ -1023,7 +1023,7 @@ fn createLogicalDevice(allocator: *Allocator) !void {
     const createInfo = vk.DeviceCreateInfo{
         .sType = vk.StructureType.DEVICE_CREATE_INFO,
 
-        .queueCreateInfoCount = @intCast(u32, queueCreateInfos.len),
+        .queueCreateInfoCount = @intCast(u32, queueCreateInfos.items.len),
         .pQueueCreateInfos = queueCreateInfos.items.ptr,
 
         .pEnabledFeatures = &deviceFeatures,
