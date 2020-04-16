@@ -35,6 +35,8 @@ var commandPool: vk.CommandPool = undefined;
 var commandBuffers: []vk.CommandBuffer = undefined;
 var vertexBuffer: vk.Buffer = undefined;
 var vertexBufferMemory:  vk.DeviceMemory = undefined;
+var indexBuffer: vk.Buffer = undefined;
+var indexBufferMemory: vk.DeviceMemory = undefined;
 
 var imageAvailableSemaphores: [MAX_FRAMES_IN_FLIGHT]vk.Semaphore = undefined;
 var renderFinishedSemaphores: [MAX_FRAMES_IN_FLIGHT]vk.Semaphore = undefined;
@@ -116,18 +118,24 @@ const Vertex = packed struct {
 
 const vertices = [_]Vertex{
     Vertex {
-        .position = [_]f32{ 0.0, -0.5 },
+        .position = [_]f32{ -0.5, -0.5 },
         .color = [_]f32{ 1.0, 0.0, 0.0 }
     },
     Vertex {
-        .position = [_]f32{ 0.5, 0.5},
+        .position = [_]f32{ 0.5, -0.5},
         .color = [_]f32{ 0.0, 1.0, 0.0 }
     },
     Vertex {
-        .position = [_]f32{ -0.5, 0.5 },
+        .position = [_]f32{ 0.5, 0.5 },
         .color = [_]f32{ 0.0, 0.0, 1.0 }
+    },
+    Vertex {
+        .position = [_]f32{ -0.5, 0.5 },
+        .color = [_]f32{ 1.0, 1.0, 1.0 }
     }
 };
+
+const _indices = [_]u16{ 0, 1, 2, 2, 3, 0 };
 
 pub fn main() !void {
     if (glfw.glfwInit() == 0) return error.GlfwInitFailed;
@@ -178,6 +186,9 @@ fn cleanup() void {
     vk.vkDestroyBuffer(globalDevice, vertexBuffer, null);
     vk.vkFreeMemory(globalDevice, vertexBufferMemory, null);
 
+    vk.vkDestroyBuffer(globalDevice, indexBuffer, null);
+    vk.vkFreeMemory(globalDevice, indexBufferMemory, null);
+
     vk.vkDestroyDevice(globalDevice, null);
 
     if (enableValidationLayers) {
@@ -208,7 +219,8 @@ fn initVulkan(allocator: *Allocator, window: *glfw.GLFWwindow) !void {
     // displayed on a computer monitor.
     try createFramebuffers(allocator);
     try createCommandPool(allocator);
-    try createVertexBuffer(allocator);
+    try createVertexBuffer();
+    try createIndexBuffer();
     try createCommandBuffers(allocator);
     try createSyncObjects();
 }
@@ -236,20 +248,75 @@ fn createBuffer(size: vk.DeviceSize, usage: vk.BufferUsageFlags, properties: vk.
     try checkSuccess(vk.vkBindBufferMemory(globalDevice, buffer.*, bufferMemory.*, 0));
 }
 
-fn createVertexBuffer(allocator: *Allocator) !void {
+fn copyBuffer(srcBuffer: vk.Buffer, dstBuffer: vk.Buffer, size: vk.DeviceSize) !void {
+    const allocateInfo = vk.CommandBufferAllocateInfo{
+        .sType = vk.StructureType.COMMAND_BUFFER_ALLOCATE_INFO,
+        .level = vk.CommandBufferLevel.PRIMARY,
+        .commandPool = commandPool,
+        .commandBufferCount = 1,
+    };
+
+    var commandBuffer: vk.CommandBuffer = undefined;
+    try checkSuccess(vk.vkAllocateCommandBuffers(globalDevice, &allocateInfo, @ptrCast([*]vk.CommandBuffer, &commandBuffer)));
+
+    const beginInfo = vk.CommandBufferBeginInfo{
+        .sType = vk.StructureType.COMMAND_BUFFER_BEGIN_INFO,
+        .flags = vk.CommandBufferUsageFlagBits.ONE_TIME_SUBMIT_BIT
+    };
+
+    try checkSuccess(vk.vkBeginCommandBuffer(commandBuffer, &beginInfo));
+
+        const copyRegion = vk.BufferCopy{
+            .srcOffset = 0, // Optional
+            .dstOffset = 0, // Optional
+            .size = size
+        };
+        vk.vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, @ptrCast([*] const vk.BufferCopy, &copyRegion));
+
+    try checkSuccess(vk.vkEndCommandBuffer(commandBuffer));
+
+    const submitInfo = vk.SubmitInfo{
+        .sType = vk.StructureType.SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = @ptrCast([*] const vk.CommandBuffer, &commandBuffer)
+    };
+
+    try checkSuccess(vk.vkQueueSubmit(graphicsQueue, 1, @ptrCast([*] const vk.SubmitInfo, &submitInfo), null));
+    try checkSuccess(vk.vkQueueWaitIdle(graphicsQueue));
+
+    vk.vkFreeCommandBuffers(globalDevice, commandPool, 1, @ptrCast([*] const vk.CommandBuffer, &commandBuffer));
+}
+
+fn createVertexBuffer() !void {
     const bufferSize: vk.DeviceSize = @sizeOf(Vertex) * vertices.len;
+
+    var stagingBuffer: vk.Buffer = undefined;
+    var stagingBufferMemory: vk.DeviceMemory = undefined;
     try createBuffer(
         bufferSize,
-        vk.BufferUsageFlagBits.VERTEX_BUFFER_BIT,
+        vk.BufferUsageFlagBits.TRANSFER_SRC_BIT,
         vk.MemoryPropertyFlagBits.HOST_VISIBLE_BIT | vk.MemoryPropertyFlagBits.HOST_COHERENT_BIT,
+        &stagingBuffer,
+        &stagingBufferMemory
+    );
+
+    var data : *c_void = undefined;
+    try checkSuccess(vk.vkMapMemory(globalDevice, stagingBufferMemory, 0, bufferSize, 0, &data));
+    @memcpy(@ptrCast([*]u8, data), @ptrCast([*] const u8, &vertices), bufferSize);
+    vk.vkUnmapMemory(globalDevice, stagingBufferMemory);
+
+    try createBuffer(
+        bufferSize,
+        vk.BufferUsageFlagBits.TRANSFER_DST_BIT | vk.BufferUsageFlagBits.VERTEX_BUFFER_BIT,
+        vk.MemoryPropertyFlagBits.DEVICE_LOCAL_BIT,
         &vertexBuffer,
         &vertexBufferMemory
     );
 
-    var data : *c_void = undefined;
-    try checkSuccess(vk.vkMapMemory(globalDevice, vertexBufferMemory, 0, bufferSize, 0, &data));
-    @memcpy(@ptrCast([*]u8, data), @ptrCast([*] const u8, &vertices), bufferSize);
-    vk.vkUnmapMemory(globalDevice, vertexBufferMemory);
+    try copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+
+    vk.vkDestroyBuffer(globalDevice, stagingBuffer, null);
+    vk.vkFreeMemory(globalDevice, stagingBufferMemory, null);
 }
 
 fn findMemoryType(typeFilter: u32, properties: vk.FormatFeatureFlags) !u32 {
@@ -263,6 +330,38 @@ fn findMemoryType(typeFilter: u32, properties: vk.FormatFeatureFlags) !u32 {
             return i;
         }
     } else return error.FailedToFindSuitableMemoryType;
+}
+
+fn createIndexBuffer() !void {
+    const bufferSize: vk.DeviceSize = @sizeOf(@TypeOf(_indices)) * _indices.len;
+
+    var stagingBuffer: vk.Buffer = undefined;
+    var stagingBufferMemory: vk.DeviceMemory = undefined;
+    try createBuffer(
+        bufferSize,
+        vk.BufferUsageFlagBits.TRANSFER_SRC_BIT,
+        vk.MemoryPropertyFlagBits.HOST_VISIBLE_BIT | vk.MemoryPropertyFlagBits.HOST_COHERENT_BIT,
+        &stagingBuffer,
+        &stagingBufferMemory
+    );
+
+    var data : *c_void = undefined;
+    try checkSuccess(vk.vkMapMemory(globalDevice, stagingBufferMemory, 0, bufferSize, 0, &data));
+    @memcpy(@ptrCast([*]u8, data), @ptrCast([*] const u8, &_indices), bufferSize);
+    vk.vkUnmapMemory(globalDevice, stagingBufferMemory);
+
+    try createBuffer(
+        bufferSize,
+        vk.BufferUsageFlagBits.TRANSFER_DST_BIT | vk.BufferUsageFlagBits.INDEX_BUFFER_BIT,
+        vk.MemoryPropertyFlagBits.DEVICE_LOCAL_BIT,
+        &indexBuffer,
+        &indexBufferMemory
+    );
+
+    try copyBuffer(stagingBuffer, indexBuffer, bufferSize);
+
+    vk.vkDestroyBuffer(globalDevice, stagingBuffer, null);
+    vk.vkFreeMemory(globalDevice, stagingBufferMemory, null);
 }
 
 fn createInstance(allocator: *Allocator) !void {
@@ -470,7 +569,9 @@ fn createCommandBuffers(allocator: *Allocator) !void {
             const offsets = [1]vk.DeviceSize{ 0 };
             vk.vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, &vertexBuffers, &offsets);
 
-            vk.vkCmdDraw(commandBuffers[i], 3, 1, 0, 0);
+            vk.vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, vk.IndexType.UINT16);
+
+            vk.vkCmdDrawIndexed(commandBuffers[i], @as(u16, _indices.len), 1, 0, 0, 0);
         }
         vk.vkCmdEndRenderPass(commandBuffers[i]);
 
