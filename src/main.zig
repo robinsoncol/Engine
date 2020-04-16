@@ -1,10 +1,9 @@
 const std = @import("std");
-
 const Allocator = std.mem.Allocator;
 const maxInt = std.math.maxInt;
 
-const vk = @import("vulkan.zig");
-const glfw = @import("glfw.zig");
+const vk = @import("./bindings/vulkan.zig");
+const glfw = @import("./bindings/glfw.zig");
 
 const WIDTH = 1280;
 const HEIGHT = 720;
