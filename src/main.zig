@@ -213,32 +213,42 @@ fn initVulkan(allocator: *Allocator, window: *glfw.GLFWwindow) !void {
     try createSyncObjects();
 }
 
-fn createVertexBuffer(allocator: *Allocator) !void {
+fn createBuffer(size: vk.DeviceSize, usage: vk.BufferUsageFlags, properties: vk.MemoryPropertyFlags, buffer: *vk.Buffer, bufferMemory: *vk.DeviceMemory) !void {
     const bufferInfo = vk.BufferCreateInfo{
         .sType = vk.StructureType.BUFFER_CREATE_INFO,
-        .size = @sizeOf(Vertex) * vertices.len,
-        .usage = vk.BufferUsageFlagBits.VERTEX_BUFFER_BIT,
+        .size = size,
+        .usage = usage,
         .sharingMode = vk.SharingMode.EXCLUSIVE
     };
 
-    try checkSuccess(vk.vkCreateBuffer(globalDevice, &bufferInfo, null, &vertexBuffer));
+    try checkSuccess(vk.vkCreateBuffer(globalDevice, &bufferInfo, null, buffer));
 
     var memoryRequirements : vk.MemoryRequirements = undefined;
-    vk.vkGetBufferMemoryRequirements(globalDevice, vertexBuffer, &memoryRequirements);
+    vk.vkGetBufferMemoryRequirements(globalDevice, buffer.*, &memoryRequirements);
 
-    const allocInfo = vk.MemoryAllocateInfo{
+    const allocateInfo = vk.MemoryAllocateInfo{
         .sType = vk.StructureType.MEMORY_ALLOCATE_INFO,
         .allocationSize = memoryRequirements.size,
-        .memoryTypeIndex = try findMemoryType(memoryRequirements.memoryTypeBits, vk.MemoryPropertyFlagBits.HOST_VISIBLE_BIT | vk.MemoryPropertyFlagBits.HOST_COHERENT_BIT)
+        .memoryTypeIndex = try findMemoryType(memoryRequirements.memoryTypeBits, properties)
     };
 
-    try checkSuccess(vk.vkAllocateMemory(globalDevice, &allocInfo, null, &vertexBufferMemory));
+    try checkSuccess(vk.vkAllocateMemory(globalDevice, &allocateInfo, null, bufferMemory));
+    try checkSuccess(vk.vkBindBufferMemory(globalDevice, buffer.*, bufferMemory.*, 0));
+}
 
-    try checkSuccess(vk.vkBindBufferMemory(globalDevice, vertexBuffer, vertexBufferMemory, 0));
+fn createVertexBuffer(allocator: *Allocator) !void {
+    const bufferSize: vk.DeviceSize = @sizeOf(Vertex) * vertices.len;
+    try createBuffer(
+        bufferSize,
+        vk.BufferUsageFlagBits.VERTEX_BUFFER_BIT,
+        vk.MemoryPropertyFlagBits.HOST_VISIBLE_BIT | vk.MemoryPropertyFlagBits.HOST_COHERENT_BIT,
+        &vertexBuffer,
+        &vertexBufferMemory
+    );
 
     var data : *c_void = undefined;
-    try checkSuccess(vk.vkMapMemory(globalDevice, vertexBufferMemory, 0, bufferInfo.size, 0, &data));
-    @memcpy(@ptrCast([*]u8, data), @ptrCast([*] const u8, &vertices), bufferInfo.size);
+    try checkSuccess(vk.vkMapMemory(globalDevice, vertexBufferMemory, 0, bufferSize, 0, &data));
+    @memcpy(@ptrCast([*]u8, data), @ptrCast([*] const u8, &vertices), bufferSize);
     vk.vkUnmapMemory(globalDevice, vertexBufferMemory);
 }
 
