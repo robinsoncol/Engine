@@ -3,5 +3,6 @@
     "files.trimTrailingWhitespace": true,
     "files.exclude": {
         "zig-cache": true
-    }
+    },
+    "editor.minimap.enabled": false
 }
